@@ -824,6 +824,15 @@ function VideoBuilder({ project, assets, options, onSaved, onError, bare }) {
         <input type="checkbox" checked={hd} onChange={(e) => setHd(e.target.checked)} /> Full HD 1080 (chậm và nặng máy hơn, mặc định 720)
       </label>
       <p className="muted small">Dùng nhạc có bản quyền hoặc nhạc miễn phí bản quyền để tránh bị khoá video trên các nền tảng.</p>
+      {(() => {
+        const per = motion === 'fast_cuts' && !fx.motion ? 1.3 : Number(sec) || 2.5
+        const nImg = chosen.filter((cid) => imgs.find((x) => x.id === cid)?.kind !== 'video').length
+        const nVid = chosen.length - nImg
+        const tot = nImg * per
+        return (
+          <p className="small"><b>Sẽ dựng:</b> {nImg} ảnh × {per} giây = <b>{Math.max(tot, nVid ? tot : 5).toFixed(1)} giây</b>{nVid ? ` + ${nVid} clip video (giữ độ dài thật)` : ''}. Mỗi ảnh hiện đúng {per} giây (tối thiểu cả video 5 giây).</p>
+        )
+      })()}
       <div className="row">
         <button className="btn ghost" disabled={progress !== null || chosen.length === 0} onClick={() => run(true)}>
           {progress !== null ? `Đang dựng… ${Math.round(progress * 100)}%` : '👀 Xem thử nhanh (360p)'}
