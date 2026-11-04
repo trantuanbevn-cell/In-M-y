@@ -700,7 +700,7 @@ function VideoBuilder({ project, assets, options, onSaved, onError }) {
     <section className="panel">
       <h2>Dựng video</h2>
       <div className="tabs">
-        <button type="button" className={'tabbtn' + (tab === 'ai' ? ' on' : '')} onClick={() => setTab('ai')}>🤖 AI tạo video (Veo, tính phí)</button>
+        <button type="button" className={'tabbtn' + (tab === 'ai' ? ' on' : '')} onClick={() => setTab('ai')}>🤖 AI tạo video (tính phí)</button>
         <button type="button" className={'tabbtn' + (tab === 'mix' ? ' on' : '')} onClick={() => setTab('mix')}>🎞 Ghép ảnh (miễn phí)</button>
       </div>
       {imgs.length === 0 && <p className="muted small">Hãy tải ảnh ở bước 2 hoặc tạo ảnh ở bước 5 trước.</p>}
@@ -801,53 +801,51 @@ function VideoBuilder({ project, assets, options, onSaved, onError }) {
 }
 
 
-const RATE = { lite: { '720p': 0.05, '1080p': 0.08 }, fast: { '720p': 0.1, '1080p': 0.12 } }
+// Giá tham khảo Google công bố: khoảng 0,10 USD mỗi giây ở 720p. 360p và 1080p là ước tính theo tỉ lệ credit.
+const RATE = { '360p': 0.035, '720p': 0.1, '1080p': 0.133 }
 const VND = 25500
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
-// Mỗi ảnh được chọn thành một clip video do Veo tạo, lưu vào dự án (chưa duyệt)
+// Mỗi ảnh được chọn thành một clip video do Gemini Omni tạo, lưu vào dự án (chưa duyệt)
 function AiVideo({ project, images, onSaved, onError }) {
   const concept = chosenConcept(project)
   const [aspect, setAspect] = useState('9:16')
-  const [seconds, setSeconds] = useState(6)
+  const [seconds, setSeconds] = useState(5)
   const [res, setRes] = useState('720p')
-  const [model, setModel] = useState('lite')
   const [note, setNote] = useState('')
   const [status, setStatus] = useState('')
   const [busy, setBusy] = useState(false)
 
-  const r1080 = aspect === '16:9' ? res : '720p'
-  const cost = images.length * seconds * RATE[model][r1080]
+  const cost = images.length * seconds * RATE[res]
 
   const run = async () => {
     onError('')
     if (!images.length) return onError('Hãy chọn ít nhất một ảnh ở trên.')
-    if (!confirm(`Tạo ${images.length} clip x ${seconds} giây, ${aspect}, ${r1080}.\nChi phí ước tính khoảng $${cost.toFixed(2)} (~${Math.round((cost * VND) / 1000) * 1000}đ) trừ vào tài khoản Google AI.\nTiếp tục?`)) return
+    if (!confirm(`Tạo ${images.length} clip x ${seconds} giây, ${aspect}, ${res}.\nChi phí ước tính khoảng $${cost.toFixed(2)} (~${(Math.round((cost * VND) / 1000) * 1000).toLocaleString('vi-VN')}đ) trừ vào tài khoản Google AI.\nTiếp tục?`)) return
     setBusy(true)
     try {
       for (let i = 0; i < images.length; i++) {
-        setStatus(`Clip ${i + 1}/${images.length}: đang gửi cho Veo…`)
+        setStatus(`Clip ${i + 1}/${images.length}: đang gửi cho AI…`)
         const img = await shrink(images[i].url, 1280)
         const shot = concept?.storyboard?.[i]?.motion_en || 'slow cinematic push-in with gentle parallax'
         const prompt = [
-          `Animate this image into a ${seconds}-second cinematic product clip.`,
           `Camera and motion: ${shot}.`,
           concept?.mood_en ? `Mood: ${concept.mood_en}.` : '',
           note.trim(),
           `Keep the product's shape, colors and printed details unchanged. No text overlays, no new objects, no people.`,
         ].filter(Boolean).join(' ')
-        const st = await callFn('studio-video', { action: 'start', prompt, image: img, aspect, seconds, resolution: r1080, model })
+        const st = await callFn('studio-video', { action: 'start', prompt, image: img, aspect, seconds, resolution: res })
         const t0 = Date.now()
         for (;;) {
           await sleep(8000)
-          setStatus(`Clip ${i + 1}/${images.length}: Veo đang dựng… ${Math.round((Date.now() - t0) / 1000)} giây`)
-          const out = await callFn('studio-video', { action: 'poll', operation: st.operation, project_id: project.id })
+          setStatus(`Clip ${i + 1}/${images.length}: AI đang dựng… ${Math.round((Date.now() - t0) / 1000)} giây`)
+          const out = await callFn('studio-video', { action: 'poll', id: st.id, project_id: project.id })
           if (out.done) break
-          if (Date.now() - t0 > 8 * 60 * 1000) throw new Error('Veo quá lâu chưa xong, thử lại sau.')
+          if (Date.now() - t0 > 10 * 60 * 1000) throw new Error('AI quá lâu chưa xong, thử lại sau.')
         }
         onSaved()
       }
-      setStatus('Xong. Các clip nằm ở mục Kết quả → Video, tích “Dùng” clip bạn chọn.')
+      setStatus('Xong. Các clip nằm ở mục Kết quả → Video, bấm vào để xem lớn và tích “Dùng” clip bạn chọn.')
     } catch (e) {
       onError(e.message || String(e))
       setStatus('')
@@ -857,7 +855,7 @@ function AiVideo({ project, images, onSaved, onError }) {
 
   return (
     <div className="aivid">
-      <p className="muted small">Mỗi ảnh đã chọn trở thành một clip video có âm thanh (Google Veo 3.1). Clip lưu ở mục Kết quả để bạn xem và tích “Dùng”.</p>
+      <p className="muted small">Mỗi ảnh đã chọn trở thành một clip video có âm thanh (Google Gemini Omni Flash). Clip lưu ở mục Kết quả để bạn xem và tích “Dùng”. Thử nghiệm nên chọn 360p cho rẻ.</p>
       <div className="two">
         <label>Khổ video
           <select value={aspect} onChange={(e) => setAspect(e.target.value)}>
@@ -867,28 +865,21 @@ function AiVideo({ project, images, onSaved, onError }) {
         </label>
         <label>Số giây mỗi clip
           <select value={seconds} onChange={(e) => setSeconds(Number(e.target.value))}>
-            <option value="4">4 giây</option><option value="6">6 giây</option><option value="8">8 giây</option>
+            {[3, 4, 5, 6, 7, 8, 9, 10].map((n) => <option key={n} value={n}>{n} giây</option>)}
           </select>
         </label>
       </div>
-      <div className="two">
-        <label>Chất lượng
-          <select value={r1080} onChange={(e) => setRes(e.target.value)} disabled={aspect !== '16:9'}>
-            <option value="720p">720p</option>
-            <option value="1080p">1080p (chỉ khổ ngang)</option>
-          </select>
-        </label>
-        <label>Mô hình
-          <select value={model} onChange={(e) => setModel(e.target.value)}>
-            <option value="lite">Veo 3.1 Lite (rẻ nhất)</option>
-            <option value="fast">Veo 3.1 Fast (đẹp hơn, gấp đôi giá)</option>
-          </select>
-        </label>
-      </div>
+      <label>Chất lượng
+        <select value={res} onChange={(e) => setRes(e.target.value)}>
+          <option value="360p">360p (nháp, rẻ nhất)</option>
+          <option value="720p">720p (chuẩn)</option>
+          <option value="1080p">1080p (nâng độ phân giải)</option>
+        </select>
+      </label>
       <label>Ý thêm cho chuyển động (tuỳ chọn)
         <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="VD: ánh đèn nhấp nháy ấm, khói nhẹ bay lên" />
       </label>
-      <p className="small"><b>Ước tính:</b> {images.length} clip × {seconds}s × ${RATE[model][r1080]}/s = <b>${cost.toFixed(2)}</b> (~{(Math.round((cost * VND) / 1000) * 1000).toLocaleString('vi-VN')}đ)</p>
+      <p className="small"><b>Ước tính:</b> {images.length} clip × {seconds}s × ${RATE[res]}/s = <b>${cost.toFixed(2)}</b> (~{(Math.round((cost * VND) / 1000) * 1000).toLocaleString('vi-VN')}đ)</p>
       <button className="btn" disabled={busy || !images.length} onClick={run}>{busy ? 'Đang tạo…' : `Tạo ${images.length || ''} clip bằng AI`}</button>
       {status && <p className="note">{status}</p>}
     </div>

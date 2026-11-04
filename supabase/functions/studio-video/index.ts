@@ -1,4 +1,5 @@
-// Tạo clip video bằng Google Veo (ảnh → video). Hai thao tác: start (gửi việc) và poll (hỏi kết quả, xong thì lưu vào kho).
+// Tạo clip video bằng Gemini Omni Flash (ảnh → video) qua Interactions API, chạy nền.
+// start: gửi việc, poll: hỏi kết quả, xong thì lưu video vào kho và thêm vào dự án.
 // Khóa GEMINI_API_KEY nằm trong Supabase secrets. Chỉ admin gọi được.
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
@@ -9,12 +10,9 @@ const cors = {
 }
 const json = (b: unknown, status = 200) =>
   new Response(JSON.stringify(b), { status, headers: { ...cors, 'Content-Type': 'application/json' } })
-const API = 'https://generativelanguage.googleapis.com/v1beta'
-const MODELS: Record<string, string> = {
-  lite: 'veo-3.1-lite-generate-preview',
-  fast: 'veo-3.1-fast-generate-preview',
-  pro: 'veo-3.1-generate-preview',
-}
+const API = 'https://generativelanguage.googleapis.com/v1beta/interactions'
+const MODEL = Deno.env.get('GEMINI_VIDEO_MODEL') || 'gemini-omni-1.1-flash'
+const RES = ['360p', '720p', '1080p']
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors })
@@ -42,46 +40,58 @@ Deno.serve(async (req) => {
     if (!im?.data || im.data.length > 6_000_000 || !/^image\/(jpeg|png|webp)$/.test(im.mime || ''))
       return json({ error: 'Ảnh đầu vào không hợp lệ hoặc quá lớn.' }, 400)
     const aspect = body.aspect === '16:9' ? '16:9' : '9:16'
-    const seconds = [4, 6, 8].includes(Number(body.seconds)) ? Number(body.seconds) : 6
-    const resolution = body.resolution === '1080p' && aspect === '16:9' ? '1080p' : '720p'
-    const model = MODELS[body.model] || MODELS.lite
-    const payload = {
-      instances: [{ prompt, image: { bytesBase64Encoded: im.data, mimeType: im.mime } }],
-      parameters: { aspectRatio: aspect, durationSeconds: seconds, resolution },
-    }
-    const r = await fetch(`${API}/models/${model}:predictLongRunning`, {
+    const seconds = Math.min(10, Math.max(3, Math.round(Number(body.seconds) || 5)))
+    const resolution = RES.includes(body.resolution) ? body.resolution : '720p'
+    const text = `${seconds} second, ${aspect} video. Use the image as the first frame. ${prompt}`
+    const r = await fetch(API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        model: MODEL,
+        input: [
+          { type: 'image', data: im.data, mime_type: im.mime },
+          { type: 'text', text },
+        ],
+        response_format: { type: 'video', aspect_ratio: aspect, resolution },
+        generation_config: { video_config: { task: 'image_to_video' } },
+        background: true,
+      }),
     })
     const raw = await r.json().catch(() => ({}))
-    if (!r.ok || !raw?.name) return json({ error: 'gemini_error', message: raw?.error?.message || `HTTP ${r.status}` }, 502)
-    return json({ ok: true, operation: raw.name, model, seconds, resolution })
+    if (!r.ok || !raw?.id) return json({ error: 'gemini_error', message: raw?.error?.message || `HTTP ${r.status}` }, 502)
+    return json({ ok: true, id: raw.id, status: raw.status, seconds, resolution, immediate: raw.status === 'completed' })
   }
 
   if (body.action === 'poll') {
-    const op = String(body.operation || '')
+    const id = String(body.id || '')
     const projectId = String(body.project_id || '')
-    if (!/^models\/[\w.\-]+\/operations\/[\w\-]+$/.test(op) || !/^[0-9a-f-]{36}$/.test(projectId))
-      return json({ error: 'Tham số không hợp lệ.' }, 400)
-    const r = await fetch(`${API}/${op}`, { headers: { 'x-goog-api-key': key } })
+    if (!/^[\w\-.]+$/.test(id) || !/^[0-9a-f-]{36}$/.test(projectId)) return json({ error: 'Tham số không hợp lệ.' }, 400)
+    const r = await fetch(`${API}/${id}`, { headers: { 'x-goog-api-key': key } })
     const raw = await r.json().catch(() => ({}))
     if (!r.ok) return json({ error: 'gemini_error', message: raw?.error?.message || `HTTP ${r.status}` }, 502)
-    if (!raw.done) return json({ ok: true, done: false })
-    if (raw.error) return json({ error: 'gemini_error', message: raw.error.message || 'Veo báo lỗi.' }, 502)
-    const resp = raw.response || {}
-    const sample = resp.generateVideoResponse?.generatedSamples?.[0] || resp.generatedVideos?.[0]
-    const uri = sample?.video?.uri
-    if (!uri) {
-      const why = resp.generateVideoResponse?.raiMediaFilteredReasons?.[0] || 'không rõ'
-      return json({ error: 'no_video', message: `Veo không trả video (lý do: ${why}).` }, 502)
-    }
-    const dl = await fetch(uri, { headers: { 'x-goog-api-key': key }, redirect: 'follow' })
-    if (!dl.ok) return json({ error: 'download_failed', message: `Không tải được video từ Google (HTTP ${dl.status}).` }, 502)
-    const bytes = new Uint8Array(await dl.arrayBuffer())
+    const st = String(raw.status || '')
+    if (st === 'failed' || st === 'cancelled' || st === 'incomplete')
+      return json({ error: 'gemini_error', message: `Video thất bại (${st}). ${raw.error?.message || ''}`.trim() }, 502)
+    const vid = (raw.steps || [])
+      .filter((s: any) => s.type === 'model_output')
+      .flatMap((s: any) => s.content || [])
+      .find((c: any) => c.type === 'video')
+    if (st !== 'completed' || !vid) return json({ ok: true, done: false, status: st })
+
+    let bytes: Uint8Array
+    if (vid.data) {
+      const bin = atob(vid.data)
+      bytes = new Uint8Array(bin.length)
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+    } else if (vid.uri) {
+      const dl = await fetch(vid.uri, { headers: { 'x-goog-api-key': key }, redirect: 'follow' })
+      if (!dl.ok) return json({ error: 'download_failed', message: `Không tải được video (HTTP ${dl.status}).` }, 502)
+      bytes = new Uint8Array(await dl.arrayBuffer())
+    } else return json({ error: 'no_video', message: 'Google không trả dữ liệu video.' }, 502)
+
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!)
-    const path = `${projectId}/video/${Date.now()}-veo.mp4`
-    const up = await admin.storage.from('studio-media').upload(path, bytes, { contentType: 'video/mp4' })
+    const path = `${projectId}/video/${Date.now()}-ai.mp4`
+    const up = await admin.storage.from('studio-media').upload(path, bytes, { contentType: vid.mime_type || 'video/mp4' })
     if (up.error) return json({ error: 'storage_error', message: up.error.message }, 500)
     const url = admin.storage.from('studio-media').getPublicUrl(path).data.publicUrl
     const ins = await admin.from('studio_assets').insert({ project_id: projectId, kind: 'video', url, storage_path: path, approved: false })
