@@ -47,26 +47,43 @@ function CopyBox({ title, text, hint }) {
   )
 }
 
-// Mục gập: bấm tiêu đề để mở, chỉ một mục mở một lúc
+// Mục tính năng: bấm ô để mở bảng lớn giữa màn hình, chọn xong thì đóng lại
 function Acc({ id, title, summary, open, onToggle, next, children }) {
+  useEffect(() => {
+    if (!open) return
+    const k = (e) => e.key === 'Escape' && onToggle('')
+    window.addEventListener('keydown', k)
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', k)
+      document.body.style.overflow = prev
+    }
+  }, [open])
   return (
-    <section className={'acc' + (open ? ' open' : '')}>
-      <button type="button" className="acc-h" onClick={() => onToggle(open ? '' : id)} aria-expanded={open}>
-        <span className="acc-t">{title}</span>
-        <span className="acc-s">{summary}</span>
-        <span className="acc-c" aria-hidden="true">{open ? '▾' : '▸'}</span>
+    <>
+      <button type="button" className={'tile' + (summary && !/^(Chưa|0)/.test(summary) ? ' done' : '')} onClick={() => onToggle(id)}>
+        <span className="tile-t">{title}</span>
+        <span className="tile-s">{summary}</span>
       </button>
       {open && (
-        <div className="acc-b">
-          {children}
-          <div className="row acc-f">
-            <button type="button" className="btn" onClick={() => onToggle(next || '')}>
-              {next ? 'Xong, mục tiếp theo' : 'Xong'}
-            </button>
+        <div className="modal-bg" onClick={() => onToggle('')}>
+          <div className="modal" role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-h">
+              <h2>{title}</h2>
+              <button type="button" className="modal-x" onClick={() => onToggle('')} aria-label="Đóng">✕</button>
+            </div>
+            <div className="modal-b">{children}</div>
+            <div className="modal-f">
+              <button type="button" className="btn ghost" onClick={() => onToggle('')}>Đóng</button>
+              <button type="button" className="btn" onClick={() => onToggle(next || '')}>
+                {next ? 'Xong, mục tiếp theo' : 'Xong'}
+              </button>
+            </div>
           </div>
         </div>
       )}
-    </section>
+    </>
   )
 }
 
@@ -167,7 +184,7 @@ function StudioProjectInner() {
     load()
   }, [id])
   useEffect(() => {
-    if (loaded && open === null) setOpen(p?.info?.name ? '' : 'info')
+    if (loaded && open === null) setOpen('')
   }, [loaded])
 
   const product = useMemo(() => products.find((x) => x.id === p?.product_id), [products, p])
@@ -362,7 +379,7 @@ function StudioProjectInner() {
       {msg && <p className="note">{msg}</p>}
 
       <div className="studio-grid">
-      <aside className="studio-set">
+      <aside className="studio-set tiles">
       {/* 1. Thông tin */}
       <Acc id="info" title="1. Thông tin sản phẩm" summary={infoSum} open={open === 'info'} onToggle={setOpen} next="photos">
         <div className="two">
