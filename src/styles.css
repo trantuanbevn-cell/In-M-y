@@ -294,3 +294,4 @@ legend { font-weight: 600; padding: 0 6px; }
 .sdlg .pposters { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
 .sdlg .chosen { max-height: 120px; }
 @media (max-width: 640px) { .sdlg-bg { padding: 0; align-items: flex-end; } .sdlg { max-height: 94vh; border-radius: 18px 18px 0 0; } }
+.studio-set.tiles .tile { flex-direction: row !important; justify-content: flex-start; }
