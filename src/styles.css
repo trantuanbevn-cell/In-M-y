@@ -295,3 +295,10 @@ legend { font-weight: 600; padding: 0 6px; }
 .sdlg .chosen { max-height: 120px; }
 @media (max-width: 640px) { .sdlg-bg { padding: 0; align-items: flex-end; } .sdlg { max-height: 94vh; border-radius: 18px 18px 0 0; } }
 .studio-set.tiles .tile { flex-direction: row !important; justify-content: flex-start; }
+
+/* Bộ dựng kiểu TikTok */
+.presets { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-top: 8px; }
+.preset { text-align: left; background: #fff; border: 2px solid var(--line); border-radius: 14px; padding: 12px; cursor: pointer; font: inherit; display: flex; flex-direction: column; gap: 3px; transition: transform .15s, border-color .15s; }
+.preset:hover { transform: translateY(-2px); border-color: #7c3aed; }
+.preset .pi { font-size: 26px; }
+.pro .tabs { margin-top: 8px; }

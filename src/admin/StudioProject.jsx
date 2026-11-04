@@ -7,6 +7,9 @@ import { ZoomProvider, useZoom } from './studio/Lightbox.jsx'
 import { slugify } from '../lib.js'
 import { copyText, downloadUrl, removeStudioFile, uploadStudioFile } from './studio/media.js'
 import { renderSlideshow } from './studio/renderVideo.js'
+import { canProRender, renderPro } from './studio/proRender.js'
+import ProOptions from './studio/ProOptions.jsx'
+import { DEFAULT_FX } from './studio/proCatalog.js'
 
 const STATUS = { draft: 'Nháp', review: 'Chờ duyệt', approved: 'Đã duyệt', published: 'Đã đăng' }
 const KIND_LABEL = { photo: 'Ảnh chụp', poster: 'Poster', angle: 'Ảnh góc phụ', video: 'Video', audio: 'Nhạc' }
@@ -639,7 +642,7 @@ function AssetGrid({ assets, onApprove, onRemove, showApprove = true }) {
 function VideoBuilder({ project, assets, options, onSaved, onError, bare }) {
   const zoom = useZoom()
   const [tab, setTab] = useState(project.mode === 'manual' ? 'mix' : 'ai')
-  const imgs = assets.filter((a) => ['poster', 'angle', 'photo'].includes(a.kind))
+  const imgs = assets.filter((a) => ['poster', 'angle', 'photo', 'video'].includes(a.kind))
   const ratios = options.filter((o) => o.kind === 'ratio' && o.meta?.w)
   const selRatios = picked(project.selections, options, 'ratio').filter((o) => o.meta?.w)
   const defaultRatio = (selRatios.find((o) => o.meta.h > o.meta.w) || selRatios[0] || ratios.find((o) => o.meta.h > o.meta.w) || ratios[0])?.id
@@ -655,6 +658,8 @@ function VideoBuilder({ project, assets, options, onSaved, onError, bare }) {
   const [audioId, setAudioId] = useState('')
   const [progress, setProgress] = useState(null)
   const [result, setResult] = useState(null)
+  const [fx, setFx] = useState(DEFAULT_FX)
+  const [warn, setWarn] = useState([])
   const touched = useRef(false)
   const userPicked = useRef(false)
 
@@ -684,24 +689,40 @@ function VideoBuilder({ project, assets, options, onSaved, onError, bare }) {
     setChosen((c) => (c.includes(aid) ? c.filter((x) => x !== aid) : [...c, aid]))
   }
 
-  const run = async () => {
+  const price = Number(project.info?.sale_price) || Number(project.info?.price) || 0
+  const priceText = price ? `${price.toLocaleString('vi-VN')}đ` : ''
+
+  const run = async (preview = false) => {
     onError('')
     setResult(null)
+    setWarn([])
     try {
       setProgress(0)
-      const r = await renderSlideshow({
-        images: chosen.map((cid) => imgs.find((a) => a.id === cid)?.url).filter(Boolean),
+      const picked = chosen.map((cid) => imgs.find((a) => a.id === cid)).filter(Boolean)
+      const perImg = motion === 'fast_cuts' ? 1.3 : Number(sec) || 2.5
+      const common = {
         ratio: ratio || { w: 1080, h: 1920 },
-        shortSide: hd ? 1080 : 720,
-        secondsPerImage: Number(sec) || 2.5,
         motion,
         captions: captionsText.split('\n').map((s) => s.trim()).filter(Boolean),
-        captionStyle: capStyle,
+        captionStyle: fx.capStyle || capStyle,
         audioFile,
         audioUrl: !audioFile && audioId ? audios.find((a) => a.id === audioId)?.url : null,
         onProgress: setProgress,
-      })
-      setResult({ ...r, url: URL.createObjectURL(r.blob) })
+      }
+      let r
+      if (canProRender()) {
+        r = await renderPro({
+          ...common,
+          segments: picked.map((a) => ({ type: a.kind === 'video' ? 'video' : 'image', url: a.url, dur: perImg })),
+          shortSide: preview ? 360 : hd ? 1080 : 720,
+          fx,
+          priceText,
+        })
+      } else {
+        r = await renderSlideshow({ ...common, images: picked.filter((a) => a.kind !== 'video').map((a) => a.url), shortSide: hd ? 1080 : 720, secondsPerImage: perImg, motion })
+      }
+      setWarn(r.warnings || [])
+      setResult({ ...r, url: URL.createObjectURL(r.blob), preview })
     } catch (e) {
       onError(e.message || String(e))
     }
@@ -721,7 +742,7 @@ function VideoBuilder({ project, assets, options, onSaved, onError, bare }) {
     }
   }
 
-  const aiImgs = chosen.map((cid) => imgs.find((a) => a.id === cid)).filter(Boolean)
+  const aiImgs = chosen.map((cid) => imgs.find((a) => a.id === cid)).filter((a) => a && a.kind !== 'video')
   const Wrap = bare ? 'div' : 'section'
   return (
     <Wrap className={bare ? 'vbare' : 'panel'}>
@@ -738,8 +759,8 @@ function VideoBuilder({ project, assets, options, onSaved, onError, bare }) {
       <div className="assets">
         {imgs.map((a) => (
           <div key={a.id} className={'asset selectable' + (chosen.includes(a.id) ? ' ok' : '')} onClick={() => toggle(a.id)}>
-            <img src={a.url} alt="" />
-            <button type="button" className="zoombtn" title="Xem lớn" onClick={(e) => { e.stopPropagation(); zoom(imgs.map((x) => ({ kind: 'image', url: x.url, caption: KIND_LABEL[x.kind] })), imgs.indexOf(a)) }}>⤢</button>
+            {a.kind === 'video' ? <video src={a.url + '#t=0.1'} muted preload="metadata" /> : <img src={a.url} alt="" />}
+            <button type="button" className="zoombtn" title="Xem lớn" onClick={(e) => { e.stopPropagation(); zoom(imgs.map((x) => ({ kind: x.kind === 'video' ? 'video' : 'image', url: x.url, caption: KIND_LABEL[x.kind] })), imgs.indexOf(a)) }}>⤢</button>
             <div className="small">
               {chosen.includes(a.id) ? `#${chosen.indexOf(a.id) + 1}` : ''} {KIND_LABEL[a.kind]}
             </div>
@@ -747,11 +768,12 @@ function VideoBuilder({ project, assets, options, onSaved, onError, bare }) {
         ))}
       </div>
       {tab === 'ai' && <AiVideo project={project} images={aiImgs} onSaved={onSaved} onError={onError} />}
-      {tab === 'mix' && (<>
-      <p className="muted small">
-        Ghép ảnh thành video có chuyển động, phụ đề và nhạc. Dựng theo thời gian thực nên giữ tab mở đến khi xong. Chuyển động:{' '}
-        <b>{{ zoom_in: 'zoom chậm', pan: 'lia ngang', fast_cuts: 'nhịp nhanh' }[motion]}</b>, phụ đề: <b>{capStyle}</b>.
-      </p>
+      {tab === 'mix' && (
+        <ProOptions
+          fx={fx}
+          setFx={setFx}
+          exportNode={(
+            <div>
       <div className="two">
         <label>
           Khung hình
@@ -764,7 +786,7 @@ function VideoBuilder({ project, assets, options, onSaved, onError, bare }) {
           </select>
         </label>
         <label>
-          Giây mỗi ảnh
+          Giây mỗi ảnh (clip video dùng độ dài thật)
           <input type="number" min="1" max="8" step="0.5" value={sec} onChange={(e) => setSec(e.target.value)} />
         </label>
       </div>
@@ -802,14 +824,21 @@ function VideoBuilder({ project, assets, options, onSaved, onError, bare }) {
         <input type="checkbox" checked={hd} onChange={(e) => setHd(e.target.checked)} /> Full HD 1080 (chậm và nặng máy hơn, mặc định 720)
       </label>
       <p className="muted small">Dùng nhạc có bản quyền hoặc nhạc miễn phí bản quyền để tránh bị khoá video trên các nền tảng.</p>
-      <button className="btn" disabled={progress !== null || chosen.length === 0} onClick={run}>
-        {progress !== null ? `Đang dựng… ${Math.round(progress * 100)}%` : 'Dựng video'}
-      </button>
+      <div className="row">
+        <button className="btn ghost" disabled={progress !== null || chosen.length === 0} onClick={() => run(true)}>
+          {progress !== null ? `Đang dựng… ${Math.round(progress * 100)}%` : '👀 Xem thử nhanh (360p)'}
+        </button>
+        <button className="btn" disabled={progress !== null || chosen.length === 0} onClick={() => run(false)}>
+          Dựng video chính thức
+        </button>
+      </div>
       {result && (
         <div className="resblock">
           <video src={result.url} controls style={{ maxHeight: 420 }} />
           <p className="muted small">
             {result.width}×{result.height}, {result.seconds.toFixed(1)} giây, định dạng {result.ext.toUpperCase()}.
+            {warn.map((w) => <span key={w} className="error"> {w}</span>)}
+            {result.preview && ' Đây là bản xem thử độ phân giải thấp, bấm Dựng video chính thức để ra bản đẹp.'}
             {result.ext === 'webm' && ' Trình duyệt này xuất WebM. Shopee cần MP4 nên hãy dựng bằng Chrome/Edge mới nhất hoặc đổi định dạng bằng công cụ miễn phí.'}
           </p>
           <div className="row">
@@ -822,7 +851,10 @@ function VideoBuilder({ project, assets, options, onSaved, onError, bare }) {
           </div>
         </div>
       )}
-      </>)}
+            </div>
+          )}
+        />
+      )}
     </Wrap>
   )
 }
