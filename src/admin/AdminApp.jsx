@@ -6,6 +6,7 @@ import AdminProducts from './AdminProducts.jsx'
 import AdminCategories from './AdminCategories.jsx'
 import AdminCollections from './AdminCollections.jsx'
 import AdminSettings from './AdminSettings.jsx'
+import Password from './Password.jsx'
 
 function Login() {
   const [email, setEmail] = useState('')
@@ -97,6 +98,7 @@ export default function AdminApp() {
         <NavLink to="/admin/danh-muc">Danh mục</NavLink>
         <NavLink to="/admin/bo-suu-tap">Bộ sưu tập</NavLink>
         <NavLink to="/admin/cai-dat">Cài đặt</NavLink>
+        <NavLink to="/admin/mat-khau">Đổi mật khẩu</NavLink>
         <div className="grow" />
         <Link to="/" target="_blank">
           Xem trang web ↗
@@ -112,6 +114,7 @@ export default function AdminApp() {
           <Route path="danh-muc" element={<AdminCategories />} />
           <Route path="bo-suu-tap" element={<AdminCollections />} />
           <Route path="cai-dat" element={<AdminSettings />} />
+          <Route path="mat-khau" element={<Password />} />
         </Routes>
       </section>
     </div>
