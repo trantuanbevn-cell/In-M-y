@@ -48,7 +48,7 @@ function CopyBox({ title, text, hint }) {
 }
 
 // Mục tính năng: bấm ô để mở bảng lớn giữa màn hình, chọn xong thì đóng lại
-function Acc({ id, title, summary, open, onToggle, next, children }) {
+function Acc({ id, title, summary, open, onToggle, next, keepAlive, children }) {
   useEffect(() => {
     if (!open) return
     const k = (e) => e.key === 'Escape' && onToggle('')
@@ -66,8 +66,8 @@ function Acc({ id, title, summary, open, onToggle, next, children }) {
         <span className="tile-t">{title}</span>
         <span className="tile-s">{summary}</span>
       </button>
-      {open && (
-        <div className="sdlg-bg" onClick={() => onToggle('')}>
+      {(open || keepAlive) && (
+        <div className="sdlg-bg" style={open ? undefined : { display: 'none' }} onClick={() => onToggle('')}>
           <div className="sdlg" role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()}>
             <div className="sdlg-h">
               <h2>{title}</h2>
@@ -507,6 +507,11 @@ function StudioProjectInner() {
           <textarea rows="4" key={p.script || 'sc'} defaultValue={p.script || ''} onBlur={(e) => patch({ script: e.target.value })} />
         </label>
       </Acc>
+      {/* 6. Tạo video */}
+      <Acc id="video" title="6. Tạo video" summary={assets.filter((a) => a.kind === 'video').length ? `${assets.filter((a) => a.kind === 'video').length} video` : 'Chưa có video'} open={open === 'video'} onToggle={setOpen} keepAlive>
+        <VideoBuilder bare project={p} assets={assets} options={options} onSaved={load} onError={setErr} />
+        <p className="muted small">Có thể đóng bảng khi AI đang tạo: clip vẫn chạy nền và hiện ở mục Kết quả → Video.</p>
+      </Acc>
       </aside>
 
       <div className="studio-out">
@@ -523,9 +528,6 @@ function StudioProjectInner() {
           </div>
         ))}
       </section>
-
-      {/* 7. Dựng video */}
-      <VideoBuilder project={p} assets={assets} options={options} onSaved={load} onError={setErr} />
 
       {/* 7. Đăng */}
       <section className="panel">
@@ -627,7 +629,7 @@ function AssetGrid({ assets, onApprove, onRemove, showApprove = true }) {
   )
 }
 
-function VideoBuilder({ project, assets, options, onSaved, onError }) {
+function VideoBuilder({ project, assets, options, onSaved, onError, bare }) {
   const zoom = useZoom()
   const [tab, setTab] = useState(project.mode === 'manual' ? 'mix' : 'ai')
   const imgs = assets.filter((a) => ['poster', 'angle', 'photo'].includes(a.kind))
@@ -713,9 +715,10 @@ function VideoBuilder({ project, assets, options, onSaved, onError }) {
   }
 
   const aiImgs = chosen.map((cid) => imgs.find((a) => a.id === cid)).filter(Boolean)
+  const Wrap = bare ? 'div' : 'section'
   return (
-    <section className="panel">
-      <h2>Dựng video</h2>
+    <Wrap className={bare ? 'vbare' : 'panel'}>
+      {!bare && <h2>Dựng video</h2>}
       <div className="tabs">
         <button type="button" className={'tabbtn' + (tab === 'ai' ? ' on' : '')} onClick={() => setTab('ai')}>🤖 AI tạo video (tính phí)</button>
         <button type="button" className={'tabbtn' + (tab === 'mix' ? ' on' : '')} onClick={() => setTab('mix')}>🎞 Ghép ảnh (miễn phí)</button>
@@ -813,7 +816,7 @@ function VideoBuilder({ project, assets, options, onSaved, onError }) {
         </div>
       )}
       </>)}
-    </section>
+    </Wrap>
   )
 }
 
