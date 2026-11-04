@@ -1,8 +1,11 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../supabase.js'
 import { vnd } from '../lib.js'
 import OrderForm from '../components/OrderForm.jsx'
+
+export const SPEC_LABELS = { material: 'Chất liệu', size: 'Kích thước', weight: 'Trọng lượng', color: 'Màu sắc', make_time: 'Thời gian làm' }
+export const LINK_LABELS = { shopee: 'Shopee', tiktokShop: 'TikTok Shop', lazada: 'Lazada', facebook: 'Facebook', tiki: 'Tiki' }
 
 export default function ProductDetail() {
   const { slug } = useParams()
@@ -60,8 +63,35 @@ export default function ProductDetail() {
         </p>
         <h1>{p.name}</h1>
         {p.badge && <span className="badge static">{p.badge}</span>}
-        <p className="price big">{p.price > 0 ? vnd(p.price) : 'Liên hệ báo giá'}</p>
+        <p className="price big">
+          {p.sale_price > 0 && p.price > 0 ? vnd(p.sale_price) : p.price > 0 ? vnd(p.price) : 'Liên hệ báo giá'}
+          {p.sale_price > 0 && p.price > 0 && <span className="price old">{vnd(p.price)}</span>}
+        </p>
+        {p.story && <p className="pstory">{p.story}</p>}
         {p.description && <p className="desc">{p.description}</p>}
+        {Object.values(p.specs || {}).some(Boolean) && (
+          <dl className="specs">
+            {Object.entries(SPEC_LABELS).map(([k, label]) =>
+              p.specs?.[k] ? (
+                <Fragment key={k}>
+                  <dt>{label}</dt>
+                  <dd>{p.specs[k]}</dd>
+                </Fragment>
+              ) : null,
+            )}
+          </dl>
+        )}
+        {Object.values(p.links || {}).some(Boolean) && (
+          <div className="shoplinks">
+            {Object.entries(LINK_LABELS).map(([k, label]) =>
+              p.links?.[k] ? (
+                <a key={k} href={p.links[k]} target="_blank" rel="noreferrer">
+                  Mua trên {label}
+                </a>
+              ) : null,
+            )}
+          </div>
+        )}
         {p.tags?.length > 0 && (
           <div className="chips">
             {p.tags.map((t) => (

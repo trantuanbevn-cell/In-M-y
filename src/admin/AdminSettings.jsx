@@ -3,7 +3,7 @@ import { supabase } from '../supabase.js'
 import { useSettings } from '../components/Settings.jsx'
 
 const GROUPS = [
-  { key: 'contact', title: 'Thông tin liên hệ', fields: { phone: 'Điện thoại', email: 'Email', address: 'Địa chỉ' } },
+  { key: 'contact', title: 'Thông tin liên hệ', fields: { phone: 'Điện thoại', zalo: 'Zalo (số điện thoại hoặc link zalo.me/…)', messenger: 'Messenger (link m.me/tên-trang)', email: 'Email', address: 'Địa chỉ' } },
   {
     key: 'social',
     title: 'Mạng xã hội (dán link đầy đủ)',

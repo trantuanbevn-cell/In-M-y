@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../supabase.js'
-import { KINDS, buildPrompts, extractCaptions, picked } from './studio/prompts.js'
+import { KINDS, buildPrompts, chosenConcept, extractCaptions, picked, scriptFromConcept } from './studio/prompts.js'
+import { InfoPanel, StoryPanel } from './studio/panels.jsx'
+import { slugify } from '../lib.js'
 import { copyText, downloadUrl, removeStudioFile, uploadStudioFile } from './studio/media.js'
 import { renderSlideshow } from './studio/renderVideo.js'
 
@@ -50,22 +52,25 @@ export default function StudioProject() {
   const [assets, setAssets] = useState([])
   const [options, setOptions] = useState([])
   const [products, setProducts] = useState([])
+  const [categories, setCategories] = useState([])
   const [busy, setBusy] = useState('')
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
   const [loaded, setLoaded] = useState(false)
 
   const load = async () => {
-    const [pr, as, op, pd] = await Promise.all([
+    const [pr, as, op, pd, ct] = await Promise.all([
       supabase.from('studio_projects').select('*').eq('id', id).maybeSingle(),
       supabase.from('studio_assets').select('*').eq('project_id', id).order('created_at'),
       supabase.from('studio_options').select('*').eq('is_active', true).order('ordering'),
-      supabase.from('products').select('id,name,description,images,video_url').order('name'),
+      supabase.from('products').select('*').order('name'),
+      supabase.from('categories').select('id,name').order('ordering'),
     ])
     setP(pr.data || null)
     setAssets(as.data || [])
     setOptions(op.data || [])
     setProducts(pd.data || [])
+    setCategories(ct.data || [])
     setLoaded(true)
   }
   useEffect(() => {
@@ -118,23 +123,115 @@ export default function StudioProject() {
     load()
   }
 
+  const linkProduct = async (pid) => {
+    const x = products.find((q) => q.id === pid)
+    const fields = { product_id: pid || null }
+    if (x && !p.info?.name) {
+      fields.info = {
+        name: x.name,
+        category_id: x.category_id || '',
+        price: x.price || '',
+        sale_price: x.sale_price || '',
+        description: x.description || '',
+        specs: x.specs || {},
+        tags: (x.tags || []).join(', '),
+        badge: x.badge || '',
+        links: x.links || {},
+      }
+    }
+    await patch(fields)
+  }
+
+  const useGuess = (g) => {
+    const cur = p.info || {}
+    patch({
+      info: {
+        ...cur,
+        name: cur.name || g.name,
+        description: cur.description || g.description,
+        specs: { ...(cur.specs || {}), material: cur.specs?.material || g.material || '' },
+        tags: cur.tags || (g.tags || []).join(', '),
+        category_id: cur.category_id || categories.find((c) => g.category && c.name.toLowerCase().includes(g.category.toLowerCase()))?.id || '',
+      },
+    })
+  }
+
+  const pickConcept = (i) => {
+    const st = { ...(p.story || {}), chosen: p.story?.chosen === i ? null : i }
+    const c = st.concepts?.[i]
+    const fields = { story: st }
+    if (st.chosen !== null && c) {
+      if (!(p.script || '').trim()) fields.script = scriptFromConcept(c)
+      else if (confirm('Thay kịch bản hiện có bằng kịch bản của cốt truyện này?')) fields.script = scriptFromConcept(c)
+    }
+    patch(fields)
+  }
+
+  const concept = chosenConcept(p)
+
   const publish = async () => {
     setErr('')
     setMsg('')
-    if (!product) return setErr('Hãy gắn dự án với một sản phẩm trước khi đăng.')
+    const info = p.info || {}
+    if (!info.name?.trim()) return setErr('Hãy điền Tên sản phẩm ở bước 1.')
+    const price = Number(String(info.price || 0).replace(/\D/g, '')) || 0
+    const sale = Number(String(info.sale_price || 0).replace(/\D/g, '')) || 0
+    if (sale && price && sale >= price) return setErr('Giá khuyến mãi phải thấp hơn giá bán.')
     const imgs = assets.filter((a) => a.approved && (a.kind === 'poster' || a.kind === 'angle'))
     const vid = assets.filter((a) => a.approved && a.kind === 'video').pop()
-    if (!imgs.length && !vid) return setErr('Chưa tích “Dùng” cho poster, ảnh góc hoặc video nào.')
+    const base = assets.filter((a) => a.kind === 'photo').map((a) => a.url)
+    if (!imgs.length && !vid && !product) return setErr('Chưa tích “Dùng” cho poster, ảnh góc hoặc video nào.')
     const urls = [...imgs.filter((a) => a.kind === 'poster'), ...imgs.filter((a) => a.kind === 'angle')].map((a) => a.url)
-    const merged = [...urls, ...(product.images || []).filter((u) => !urls.includes(u))]
-    const { error } = await supabase
-      .from('products')
-      .update({ images: merged, video_url: vid ? vid.url : product.video_url || null })
-      .eq('id', product.id)
-    if (error) return setErr(error.message)
-    await patch({ status: 'published' })
-    setMsg('Đã đăng lên trang sản phẩm. Ảnh đã duyệt nằm đầu danh sách ảnh sản phẩm.')
+    const cleanLinks = Object.fromEntries(Object.entries(info.links || {}).filter(([, v]) => v && String(v).trim()))
+    const fields = {
+      name: info.name.trim(),
+      description: info.description?.trim() || null,
+      price,
+      sale_price: sale || null,
+      category_id: info.category_id || null,
+      specs: Object.fromEntries(Object.entries(info.specs || {}).filter(([, v]) => v && String(v).trim())),
+      links: cleanLinks,
+      tags: String(info.tags || '').split(',').map((t) => t.trim()).filter(Boolean),
+      badge: info.badge?.trim() || null,
+      story: concept?.page_story || product?.story || null,
+    }
+    let pid = product?.id
+    if (product) {
+      const merged = [...urls, ...(product.images || []).filter((u) => !urls.includes(u))]
+      const { error } = await supabase
+        .from('products')
+        .update({ ...fields, images: merged, video_url: vid ? vid.url : product.video_url || null })
+        .eq('id', pid)
+      if (error) return setErr(error.message)
+    } else {
+      const slug = `${slugify(fields.name)}-${Math.random().toString(36).slice(2, 6)}`
+      const { data, error } = await supabase
+        .from('products')
+        .insert({ ...fields, slug, images: [...urls, ...base.filter((u) => !urls.includes(u))], video_url: vid ? vid.url : null, is_active: true })
+        .select('id')
+        .single()
+      if (error) return setErr(error.message)
+      pid = data.id
+    }
+    await patch({ status: 'published', product_id: pid })
+    setMsg(product ? 'Đã cập nhật sản phẩm trên web: giá, link, ảnh và video.' : 'Đã tạo sản phẩm mới và đăng lên web. Khách xem và đặt hàng được ngay.')
     load()
+  }
+
+  const makeBanner = async () => {
+    setErr('')
+    const poster = assets.filter((a) => a.approved && a.kind === 'poster').pop()
+    if (!poster) return setErr('Hãy tích “Dùng” cho một poster trước.')
+    const { error } = await supabase.from('campaigns').insert({
+      title: p.poster_title || concept?.poster_headline || p.info?.name || p.title,
+      subtitle: concept?.poster_tagline || null,
+      image_url: poster.url,
+      link: product ? `/san-pham/${product.slug}` : '/san-pham',
+      cta_label: 'Xem ngay',
+      is_active: false,
+    })
+    if (error) return setErr(error.message)
+    setMsg('Đã tạo banner (đang tắt). Vào mục “Banner sự kiện” để đặt ngày và bật.')
   }
 
   const approvedFiles = assets.filter((a) => a.approved)
@@ -163,16 +260,16 @@ export default function StudioProject() {
 
       {/* 1. Thông tin */}
       <section className="panel">
-        <h2>1. Thông tin dự án</h2>
+        <h2>1. Thông tin sản phẩm (khai báo để đăng bán)</h2>
         <div className="two">
           <label>
-            Tên dự án
+            Tên dự án (chỉ để bạn nhận biết)
             <input defaultValue={p.title} onBlur={(e) => e.target.value.trim() && patch({ title: e.target.value.trim() })} />
           </label>
           <label>
-            Sản phẩm trên web
-            <select value={p.product_id || ''} onChange={(e) => patch({ product_id: e.target.value || null })}>
-              <option value="">— Chưa gắn —</option>
+            Gắn với sản phẩm đã có trên web
+            <select value={p.product_id || ''} onChange={(e) => linkProduct(e.target.value)}>
+              <option value="">— Tạo sản phẩm mới khi đăng —</option>
               {products.map((x) => (
                 <option key={x.id} value={x.id}>
                   {x.name}
@@ -181,9 +278,11 @@ export default function StudioProject() {
             </select>
           </label>
         </div>
+        <InfoPanel info={p.info} categories={categories} onSave={(info) => patch({ info })} />
         <label>
-          Tiêu đề lớn trên poster (tiếng Việt)
+          Tiêu đề lớn trên poster (để trống thì dùng tiêu đề của cốt truyện AI)
           <input
+            key={p.poster_title || 'pt'}
             defaultValue={p.poster_title || ''}
             onBlur={(e) => patch({ poster_title: e.target.value })}
             placeholder="VD: BỘ KEYCAP HALLOWEEN"
@@ -208,10 +307,23 @@ export default function StudioProject() {
         <input type="file" accept={ACCEPT.photo} multiple onChange={(e) => { const fl = [...e.target.files]; e.target.value = ''; upload('photo', fl) }} />
       </section>
 
-      {/* 3. Lựa chọn */}
+      {/* 3. Cốt truyện AI */}
+      <section className="panel">
+        <h2>3. AI gợi ý cốt truyện và concept</h2>
+        <StoryPanel
+          photos={assets.filter((a) => a.kind === 'photo')}
+          info={p.info}
+          story={p.story}
+          onSave={(story) => patch({ story })}
+          onUseGuess={useGuess}
+          onPick={pickConcept}
+        />
+      </section>
+
+      {/* 4. Lựa chọn */}
       <section className="panel">
         <div className="row between">
-          <h2>3. Chọn phong cách</h2>
+          <h2>4. Tinh chỉnh phong cách (tuỳ chọn, cộng thêm vào cốt truyện)</h2>
           <Link className="small" to="/admin/studio/thu-vien">
             Sửa thư viện ↗
           </Link>
@@ -227,7 +339,7 @@ export default function StudioProject() {
 
       {/* 4. Câu lệnh */}
       <section className="panel">
-        <h2>4. Tạo poster, ảnh góc và kịch bản</h2>
+        <h2>5. Tạo poster, ảnh góc và kịch bản</h2>
         <div className="lanes">
           <div className="lane on">
             <b>Làn bán tự động</b>
@@ -243,7 +355,7 @@ export default function StudioProject() {
             Mở <a href="https://gemini.google.com/app" target="_blank" rel="noreferrer">Gemini</a>, chọn tạo ảnh, đính kèm ảnh chụp ở bước 2 (tải ở nút bên dưới).
           </li>
           <li>Bấm “Sao chép” câu lệnh bên dưới và dán vào Gemini. Chọn kết quả ưng ý.</li>
-          <li>Tải ảnh về rồi đưa lên ở bước 5. Với clip AI, dùng <a href="https://labs.google/flow" target="_blank" rel="noreferrer">Google Flow</a> (có 50 credit miễn phí mỗi ngày).</li>
+          <li>Tải ảnh về rồi đưa lên ở bước 6. Với clip AI, dùng <a href="https://labs.google/flow" target="_blank" rel="noreferrer">Google Flow</a> (có 50 credit miễn phí mỗi ngày).</li>
         </ol>
         {assets.some((a) => a.kind === 'photo') && (
           <p className="row small">
@@ -262,7 +374,7 @@ export default function StudioProject() {
           <CopyBox key={a.label} title={a.label} text={a.prompt} />
         ))}
         <CopyBox title="Câu lệnh clip AI (Google Flow / Veo)" text={prompts.clip} hint="Dùng poster hoặc ảnh góc đã chọn làm khung hình đầu." />
-        <CopyBox title="Nhờ Gemini viết kịch bản & phụ đề" text={prompts.script} hint="Dán câu trả lời vào ô bên dưới." />
+        <CopyBox title="Nhờ Gemini viết kịch bản & phụ đề" text={prompts.script} hint="Dán câu trả lời vào ô bên dưới. (Nếu đã chọn cốt truyện AI ở bước 3 thì kịch bản đã điền sẵn.)" />
         <label>
           Kịch bản và phụ đề (dán câu trả lời của Gemini)
           <textarea rows="6" defaultValue={p.script || ''} onBlur={(e) => patch({ script: e.target.value })} />
@@ -271,7 +383,7 @@ export default function StudioProject() {
 
       {/* 5. Kết quả */}
       <section className="panel">
-        <h2>5. Kết quả: tải lên và duyệt</h2>
+        <h2>6. Kết quả: tải lên và duyệt</h2>
         <p className="muted small">Tích “Dùng” cho những tệp bạn duyệt. Chỉ tệp được tích mới được đăng lên trang sản phẩm.</p>
         {['poster', 'angle', 'video', 'audio'].map((kind) => (
           <div key={kind} className="resblock">
@@ -282,19 +394,22 @@ export default function StudioProject() {
         ))}
       </section>
 
-      {/* 6. Dựng video */}
+      {/* 7. Dựng video */}
       <VideoBuilder project={p} assets={assets} options={options} onSaved={load} onError={setErr} />
 
       {/* 7. Đăng */}
       <section className="panel">
-        <h2>7. Đăng lên trang sản phẩm và tải về</h2>
+        <h2>8. Duyệt và đăng bán</h2>
         <p className="small muted">
-          Đăng sẽ đưa poster và ảnh góc đã duyệt lên đầu ảnh sản phẩm, video đã duyệt lên trang sản phẩm.
-          {product ? ` Sản phẩm: ${product.name}.` : ' Hãy gắn sản phẩm ở bước 1.'}
+          Đăng sẽ tạo (hoặc cập nhật) sản phẩm với đúng giá, mô tả, thông số, link Shopee/TikTok đã khai ở bước 1, đưa poster và ảnh góc đã duyệt lên đầu, gắn video đã duyệt. Khách thấy giá và đặt hàng được ngay.
+          {product ? ` Đang gắn: ${product.name}.` : ' Chưa gắn sản phẩm, sẽ tạo mới.'}
         </p>
-        <button className="btn" onClick={publish} disabled={!product}>
-          Đăng lên trang sản phẩm
-        </button>
+        <div className="row">
+          <button className="btn" onClick={publish}>
+            {product ? 'Duyệt và cập nhật lên web' : 'Duyệt và đăng sản phẩm lên web'}
+          </button>
+          <button className="btn ghost" onClick={makeBanner}>Dùng poster làm banner sự kiện</button>
+        </div>
         <h3 style={{ marginTop: 18 }}>Tệp để tự đăng lên Facebook, TikTok, Shopee</h3>
         {approvedFiles.length === 0 && <p className="muted small">Chưa có tệp nào được tích “Dùng”.</p>}
         <div className="row">
@@ -448,7 +563,7 @@ function VideoBuilder({ project, assets, options, onSaved, onError }) {
     try {
       const file = new File([result.blob], `video.${result.ext}`, { type: result.type.split(';')[0] })
       const { path, url } = await uploadStudioFile(file, `${project.id}/video`)
-      const { error } = await supabase.from('studio_assets').insert({ project_id: project.id, kind: 'video', url, storage_path: path })
+      const { error } = await supabase.from('studio_assets').insert({ project_id: project.id, kind: 'video', approved: true, url, storage_path: path })
       if (error) throw error
       setResult(null)
       onSaved()
@@ -459,7 +574,7 @@ function VideoBuilder({ project, assets, options, onSaved, onError }) {
 
   return (
     <section className="panel">
-      <h2>6. Dựng video ngay trong trình duyệt (miễn phí)</h2>
+      <h2>7. Dựng video ngay trong trình duyệt (miễn phí)</h2>
       <p className="muted small">
         Ghép ảnh thành video có chuyển động, phụ đề và nhạc. Video dựng theo thời gian thực, nên giữ tab mở cho đến khi xong. Chuyển động:{' '}
         <b>{{ zoom_in: 'zoom chậm', pan: 'lia ngang', fast_cuts: 'nhịp nhanh' }[motion]}</b>, phụ đề: <b>{capStyle}</b> (đổi ở bước 3).

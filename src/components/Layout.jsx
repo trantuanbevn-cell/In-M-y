@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useSettings } from './Settings.jsx'
 
 const LABELS = {
@@ -32,6 +32,31 @@ function LinkList({ title, data }) {
   )
 }
 
+function ContactWidget({ contact, social }) {
+  const [open, setOpen] = useState(false)
+  const zalo = contact.zalo ? (/^https?:/.test(contact.zalo) ? contact.zalo : `https://zalo.me/${contact.zalo.replace(/\D/g, '')}`) : ''
+  const mess = contact.messenger || (social?.facebook && /facebook\.com\//.test(social.facebook) ? social.facebook.replace('facebook.com/', 'm.me/') : '')
+  const items = [
+    zalo && { href: zalo, label: 'Chat Zalo', cls: 'zalo', icon: 'Z' },
+    mess && { href: mess, label: 'Messenger', cls: 'mess', icon: '💬' },
+    contact.phone && { href: `tel:${contact.phone.replace(/\s/g, '')}`, label: 'Gọi ngay', cls: 'call', icon: '📞' },
+  ].filter(Boolean)
+  if (!items.length) return null
+  return (
+    <div className="chatw">
+      {open &&
+        items.map((i) => (
+          <a key={i.cls} className={'chatw-item ' + i.cls} href={i.href} target={i.href.startsWith('tel') ? undefined : '_blank'} rel="noreferrer">
+            <span>{i.icon}</span> {i.label}
+          </a>
+        ))}
+      <button className="chatw-btn" onClick={() => setOpen(!open)} aria-label="Liên hệ">
+        {open ? '✕' : '💬'}
+      </button>
+    </div>
+  )
+}
+
 export default function Layout() {
   const { settings } = useSettings()
   const { pathname } = useLocation()
@@ -58,6 +83,7 @@ export default function Layout() {
       <main>
         <Outlet />
       </main>
+      <ContactWidget contact={contact} social={settings.social} />
       <footer className="footer">
         <div className="container footer-in">
           <div>
@@ -66,6 +92,7 @@ export default function Layout() {
             </div>
             <p className="muted">{settings.sub_tagline}</p>
             {contact.phone && <p>📞 {contact.phone}</p>}
+            {contact.zalo && <p>Zalo: {contact.zalo}</p>}
             {contact.email && <p>✉️ {contact.email}</p>}
             {contact.address && <p>📍 {contact.address}</p>}
           </div>

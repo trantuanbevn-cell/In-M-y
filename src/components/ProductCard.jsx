@@ -11,7 +11,10 @@ export default function ProductCard({ p }) {
       </div>
       <div className="card-body">
         <h3>{p.name}</h3>
-        <p className="price">{p.price > 0 ? vnd(p.price) : 'Liên hệ báo giá'}</p>
+        <p className="price">
+          {p.sale_price > 0 && p.price > 0 ? vnd(p.sale_price) : p.price > 0 ? vnd(p.price) : 'Liên hệ báo giá'}
+          {p.sale_price > 0 && p.price > 0 && <span className="price old">{vnd(p.price)}</span>}
+        </p>
       </div>
     </Link>
   )

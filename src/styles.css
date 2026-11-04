@@ -189,3 +189,23 @@ legend { font-weight: 600; padding: 0 6px; }
 .soon .chips { margin: 6px 0 0; }
 .grp { font-weight: 600; margin: 10px 0 4px; }
 .pick .chips { margin-bottom: 6px; }
+
+/* Ô chat nổi */
+.chatw{position:fixed;right:16px;bottom:16px;display:flex;flex-direction:column;align-items:flex-end;gap:8px;z-index:50}
+.chatw-btn{width:54px;height:54px;border-radius:50%;border:0;background:var(--primary,#2d6cdf);color:#fff;font-size:24px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.chatw-item{display:flex;align-items:center;gap:8px;padding:10px 16px;border-radius:999px;color:#fff;text-decoration:none;font-weight:600;box-shadow:0 4px 12px rgba(0,0,0,.2)}
+.chatw-item.zalo{background:#0068ff}.chatw-item.mess{background:#a334fa}.chatw-item.call{background:#16a34a}
+.shoplinks{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.shoplinks a{padding:8px 14px;border-radius:999px;border:1px solid #cbd5e1;text-decoration:none;font-weight:600}
+.price.old{text-decoration:line-through;color:#94a3b8;font-size:.7em;margin-left:8px}
+.specs{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:10px 0}
+.specs dt{color:#64748b}.specs dd{margin:0}
+.pstory{border-left:3px solid #93c5fd;padding:6px 14px;margin:14px 0;color:#334155;font-style:italic}
+.banner{position:relative;border-radius:16px;overflow:hidden;margin:16px auto;background:#0f172a}
+.banner img{display:block;width:100%;max-height:360px;object-fit:cover}
+.banner .bt{position:absolute;left:0;right:0;bottom:0;padding:18px 22px;color:#fff;background:linear-gradient(transparent,rgba(0,0,0,.65))}
+.banner .bt h2{margin:0;color:#fff}.banner .bt p{margin:4px 0 0}
+.concepts{display:grid;gap:12px}
+.concept{border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;background:#fff}
+.concept.on{border-color:#2d6cdf;box-shadow:0 0 0 2px #bfdbfe}
+.concept h4{margin:0 0 4px}

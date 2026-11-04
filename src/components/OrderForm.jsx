@@ -11,7 +11,9 @@ export default function OrderForm({ product, title = 'Đặt hàng' }) {
     e.preventDefault()
     setState('sending')
     setErr('')
+    const orderId = crypto.randomUUID()
     const { error } = await supabase.from('orders').insert({
+      id: orderId,
       customer_name: f.name.trim(),
       customer_phone: f.phone.trim(),
       customer_email: f.email.trim() || null,
@@ -26,6 +28,8 @@ export default function OrderForm({ product, title = 'Đặt hàng' }) {
       setState('idle')
     } else {
       setState('done')
+      // Báo đơn về Telegram; lỗi ở đây không ảnh hưởng khách
+      supabase.functions.invoke('notify-order', { body: { order_id: orderId } }).catch(() => {})
     }
   }
 

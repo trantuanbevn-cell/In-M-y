@@ -20,23 +20,43 @@ export const picked = (selections, options, kind) => {
 
 const list = (arr, key = 'prompt') => arr.map((o) => o[key]).filter(Boolean)
 
+export const chosenConcept = (project) => {
+  const st = project?.story
+  return st && Number.isInteger(st.chosen) ? st.concepts?.[st.chosen] || null : null
+}
+
+export const scriptFromConcept = (c) =>
+  c ? `LỜI ĐỌC: ${c.voiceover}\nPHỤ ĐỀ:\n${(c.captions || []).map((x) => `- ${x}`).join('\n')}` : ''
+
 export function buildPrompts({ project, product, options }) {
+  const concept = chosenConcept(project)
+  const info = project.info || {}
   const sel = project.selections || {}
   const P = (k) => picked(sel, options, k)
-  const name = product?.name || project.title
-  const scene = list(P('scene')).join('; ') || 'a clean, attractive background that suits the product'
+  const name = info.name || product?.name || project.title
+  const conceptScene = concept
+    ? [
+        concept.setting_en,
+        concept.props_en?.length ? `props: ${concept.props_en.join(', ')}` : '',
+        concept.mood_en ? `mood and lighting: ${concept.mood_en}` : '',
+        concept.palette_en ? `color palette: ${concept.palette_en}` : '',
+      ].filter(Boolean).join('. ')
+    : ''
+  const scene = [conceptScene, ...list(P('scene'))].filter(Boolean).join('; ') || 'a clean, attractive background that suits the product'
   const audience = list(P('audience')).join('; ')
   const style = list(P('poster_style')).join('; ') || 'a clean, eye-catching promotional poster'
-  const badges = list(P('badge'))
-  const cta = list(P('cta'))[0]
+  const badges = [...(concept?.badges || []), ...list(P('badge'))]
+  const cta = list(P('cta'))[0] || concept?.cta
   const ratio = list(P('ratio'))[0] || '1:1'
   const free = (project.free_text || '').trim()
-  const title = (project.poster_title || '').trim()
+  const title = (project.poster_title || concept?.poster_headline || '').trim()
 
   const poster = [
     `Create a promotional poster for "InMây", a shop selling personalized 3D-printed products (tagline: "In những giấc mơ").`,
     `Use the attached reference photos as the REAL products. Keep their exact shape, colors and details. Do not redraw them or invent different products.`,
-    `Product: ${name}${product?.description ? ` — ${product.description}` : ''}.`,
+    `Product: ${name}${(info.description || product?.description) ? ` — ${info.description || product?.description}` : ''}.`,
+    concept ? `Story concept (the whole image must tell this story, the product is the hero): ${concept.title} — ${concept.story}` : '',
+    concept?.poster_tagline ? `Small tagline under the title (Vietnamese, exact): "${concept.poster_tagline}".` : '',
     title ? `Large poster title (Vietnamese, spell exactly, keep all diacritics): "${title}".` : '',
     `Poster style: ${style}.`,
     `Scene and background: ${scene}.`,
@@ -63,16 +83,19 @@ export function buildPrompts({ project, product, options }) {
       .filter(Boolean)
       .join('\n')
 
-  const angles = [
+  const angles = concept?.angle_shots?.length
+    ? concept.angle_shots.slice(0, 3).map((a) => ({ label: a.label, prompt: angleBase(a.prompt_en) }))
+    : [
     { label: 'Ảnh góc 45° trong bối cảnh', prompt: angleBase('three-quarter 45-degree angle, product in focus, soft depth of field') },
     { label: 'Ảnh cận chi tiết', prompt: angleBase('macro close-up showing surface detail and print texture') },
     { label: 'Ảnh nhìn từ trên xuống', prompt: angleBase('top-down flat-lay composition with a few matching props') },
   ]
 
-  const motions = list(P('motion')).join('; ') || 'slow cinematic push-in on the product'
+  const motions = list(P('motion')).join('; ') || (concept?.storyboard?.length ? concept.storyboard.map((s, i) => `shot ${i + 1}: ${s.motion_en}`).join('; ') : 'slow cinematic push-in on the product')
   const music = list(P('music'))[0]
   const clip = [
     `Animate the attached image into a short vertical video clip (about 6 seconds, 9:16).`,
+    concept ? `Story: ${concept.story}` : '',
     `Motion: ${motions}.`,
     `Keep the product's shape, colors and any printed text unchanged. No new objects, no text changes.`,
     music ? `Mood: ${music}.` : '',

@@ -8,8 +8,15 @@ export default function Home() {
   const { settings } = useSettings()
   const [featured, setFeatured] = useState([])
   const [cats, setCats] = useState([])
+  const [banners, setBanners] = useState([])
 
   useEffect(() => {
+    supabase
+      .from('campaigns')
+      .select('*')
+      .eq('is_active', true)
+      .order('ordering')
+      .then(({ data }) => setBanners((data || []).filter((b) => b.image_url)))
     supabase
       .from('products')
       .select('*')
@@ -30,6 +37,27 @@ export default function Home() {
 
   return (
     <>
+      {banners.length > 0 && (
+        <section className="container">
+          {banners.map((b) => {
+            const inner = (
+              <>
+                <img src={b.image_url} alt={b.title} />
+                <div className="bt">
+                  <h2>{b.title}</h2>
+                  {b.subtitle && <p>{b.subtitle}</p>}
+                </div>
+              </>
+            )
+            const ext = b.link && /^https?:/.test(b.link)
+            return b.link ? (
+              ext ? <a key={b.id} className="banner" href={b.link} target="_blank" rel="noreferrer">{inner}</a> : <Link key={b.id} className="banner" to={b.link}>{inner}</Link>
+            ) : (
+              <div key={b.id} className="banner">{inner}</div>
+            )
+          })}
+        </section>
+      )}
       <section className="hero">
         <div className="container">
           <h1>{settings.tagline || 'In những giấc mơ'}</h1>

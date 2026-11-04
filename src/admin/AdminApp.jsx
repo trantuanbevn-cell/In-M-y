@@ -7,6 +7,7 @@ import AdminCategories from './AdminCategories.jsx'
 import AdminCollections from './AdminCollections.jsx'
 import AdminSettings from './AdminSettings.jsx'
 import Password from './Password.jsx'
+import AdminCampaigns from './AdminCampaigns.jsx'
 import Studio from './Studio.jsx'
 import StudioProject from './StudioProject.jsx'
 import StudioLibrary from './StudioLibrary.jsx'
@@ -99,6 +100,7 @@ export default function AdminApp() {
         </NavLink>
         <NavLink to="/admin/san-pham">Sản phẩm</NavLink>
         <NavLink to="/admin/studio">🎬 Studio</NavLink>
+        <NavLink to="/admin/banner">Banner sự kiện</NavLink>
         <NavLink to="/admin/danh-muc">Danh mục</NavLink>
         <NavLink to="/admin/bo-suu-tap">Bộ sưu tập</NavLink>
         <NavLink to="/admin/cai-dat">Cài đặt</NavLink>
@@ -118,6 +120,7 @@ export default function AdminApp() {
           <Route path="studio" element={<Studio />} />
           <Route path="studio/thu-vien" element={<StudioLibrary />} />
           <Route path="studio/:id" element={<StudioProject />} />
+          <Route path="banner" element={<AdminCampaigns />} />
           <Route path="danh-muc" element={<AdminCategories />} />
           <Route path="bo-suu-tap" element={<AdminCollections />} />
           <Route path="cai-dat" element={<AdminSettings />} />
