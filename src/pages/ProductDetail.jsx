@@ -37,6 +37,9 @@ export default function ProductDetail() {
         <div className="big-img">
           {imgs[idx] ? <img src={imgs[idx]} alt={p.name} /> : <span className="ph">☁️</span>}
         </div>
+        {p.video_url && (
+          <video className="prod-video" src={p.video_url} controls playsInline preload="metadata" />
+        )}
         {imgs.length > 1 && (
           <div className="thumbs">
             {imgs.map((u, i) => (

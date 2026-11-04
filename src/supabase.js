@@ -6,3 +6,4 @@ const key =
 
 export const supabase = createClient(url, key)
 export const BUCKET = 'product-images'
+export const STUDIO_BUCKET = 'studio-media'

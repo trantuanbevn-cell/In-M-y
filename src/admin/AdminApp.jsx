@@ -7,6 +7,9 @@ import AdminCategories from './AdminCategories.jsx'
 import AdminCollections from './AdminCollections.jsx'
 import AdminSettings from './AdminSettings.jsx'
 import Password from './Password.jsx'
+import Studio from './Studio.jsx'
+import StudioProject from './StudioProject.jsx'
+import StudioLibrary from './StudioLibrary.jsx'
 
 function Login() {
   const [email, setEmail] = useState('')
@@ -95,6 +98,7 @@ export default function AdminApp() {
           Đơn hàng
         </NavLink>
         <NavLink to="/admin/san-pham">Sản phẩm</NavLink>
+        <NavLink to="/admin/studio">🎬 Studio</NavLink>
         <NavLink to="/admin/danh-muc">Danh mục</NavLink>
         <NavLink to="/admin/bo-suu-tap">Bộ sưu tập</NavLink>
         <NavLink to="/admin/cai-dat">Cài đặt</NavLink>
@@ -111,6 +115,9 @@ export default function AdminApp() {
         <Routes>
           <Route index element={<Orders />} />
           <Route path="san-pham" element={<AdminProducts />} />
+          <Route path="studio" element={<Studio />} />
+          <Route path="studio/thu-vien" element={<StudioLibrary />} />
+          <Route path="studio/:id" element={<StudioProject />} />
           <Route path="danh-muc" element={<AdminCategories />} />
           <Route path="bo-suu-tap" element={<AdminCollections />} />
           <Route path="cai-dat" element={<AdminSettings />} />
