@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../supabase.js'
 import { KINDS, buildPrompts, chosenConcept, extractCaptions, picked, scriptFromConcept } from './studio/prompts.js'
-import { AutoGen, InfoPanel, StoryPanel, nearestRatio } from './studio/panels.jsx'
+import { AutoGen, InfoPanel, StoryPanel, callFn, nearestRatio, shrink } from './studio/panels.jsx'
+import { ZoomProvider, useZoom } from './studio/Lightbox.jsx'
 import { slugify } from '../lib.js'
 import { copyText, downloadUrl, removeStudioFile, uploadStudioFile } from './studio/media.js'
 import { renderSlideshow } from './studio/renderVideo.js'
@@ -111,13 +112,30 @@ function StylePanel({ options, selections, onToggle }) {
   )
 }
 
-function AssetPreview({ a }) {
-  if (a.kind === 'video') return <video src={a.url} controls preload="metadata" />
+function AssetPreview({ a, group }) {
+  const zoom = useZoom()
+  const items = (group || [a]).filter((x) => x.kind !== 'audio').map((x) => ({ kind: x.kind === 'video' ? 'video' : 'image', url: x.url, caption: KIND_LABEL[x.kind] }))
+  const at = Math.max(0, (group || [a]).filter((x) => x.kind !== 'audio').findIndex((x) => x.id === a.id))
   if (a.kind === 'audio') return <audio src={a.url} controls />
-  return <img src={a.url} alt="" />
+  if (a.kind === 'video')
+    return (
+      <>
+        <video src={a.url} controls preload="metadata" />
+        <button type="button" className="zoombtn" title="Xem lớn" onClick={() => zoom(items, at)}>⤢</button>
+      </>
+    )
+  return <img className="zoomable" src={a.url} alt="" title="Bấm để xem lớn" onClick={() => zoom(items, at)} />
 }
 
 export default function StudioProject() {
+  return (
+    <ZoomProvider>
+      <StudioProjectInner />
+    </ZoomProvider>
+  )
+}
+
+function StudioProjectInner() {
   const { id } = useParams()
   const [p, setP] = useState(null)
   const [assets, setAssets] = useState([])
@@ -196,6 +214,12 @@ export default function StudioProject() {
     await removeStudioFile(a.storage_path)
     await supabase.from('studio_assets').delete().eq('id', a.id)
     load()
+  }
+
+  const pickPoster = async (a) => {
+    setAssets((cur) => cur.map((x) => (x.kind === 'poster' ? { ...x, approved: x.id === a.id } : x)))
+    await supabase.from('studio_assets').update({ approved: false }).eq('project_id', id).eq('kind', 'poster')
+    await supabase.from('studio_assets').update({ approved: true }).eq('id', a.id)
   }
 
   const linkProduct = async (pid) => {
@@ -405,22 +429,35 @@ export default function StudioProject() {
       </Acc>
 
       {/* 4. Câu lệnh */}
-      <Acc id="gen" title="5. Tạo ảnh bằng AI" summary={`${prompts.angles.length + 1} ảnh · câu lệnh`} open={open === 'gen'} onToggle={setOpen}>
-        <AutoGen
-          photos={assets.filter((a) => a.kind === 'photo')}
-          aspect={nearestRatio(ratioMeta?.w, ratioMeta?.h)}
-          jobs={[
-            { kind: 'poster', label: 'Poster chính', prompt: prompts.poster },
-            ...prompts.angles.map((x) => ({ kind: 'angle', label: x.label, prompt: x.prompt })),
-          ]}
-          onSaveImage={async (kind, file) => {
-            const { path, url } = await uploadStudioFile(file, `${id}/${kind}`)
-            const { error } = await supabase.from('studio_assets').insert({ project_id: id, kind, url, storage_path: path })
-            if (error) throw error
-            load()
-          }}
-        />
-        <details className="manual">
+      <Acc id="gen" title="5. Tạo ảnh bằng AI" summary={(p.mode === 'semi' ? 'Bán tự động' : 'Tự động') + ' · 3 poster + ' + prompts.angles.length + ' ảnh phụ'} open={open === 'gen'} onToggle={setOpen}>
+        <div className="modecards">
+          <button type="button" className={'modecard' + (p.mode !== 'semi' ? ' on' : '')} onClick={() => patch({ mode: 'auto' })}>
+            <b>⚡ Tự động (AI Gemini)</b>
+            <span className="small muted">Bấm nút, AI vẽ poster và ảnh phụ ngay trong app. Mất phí nhỏ mỗi ảnh.</span>
+          </button>
+          <button type="button" className={'modecard' + (p.mode === 'semi' ? ' on' : '')} onClick={() => patch({ mode: 'semi' })}>
+            <b>✋ Bán tự động</b>
+            <span className="small muted">App soạn sẵn câu lệnh, bạn dán vào Gemini/Flow rồi tải ảnh lên. Tiết kiệm.</span>
+          </button>
+        </div>
+        {p.mode !== 'semi' && (
+          <AutoGen
+            photos={assets.filter((a) => a.kind === 'photo')}
+            aspect={nearestRatio(ratioMeta?.w, ratioMeta?.h)}
+            posterJobs={prompts.posters.map((x) => ({ kind: 'poster', label: x.label, prompt: x.prompt }))}
+            angleJobs={prompts.angles.map((x) => ({ kind: 'angle', label: x.label, prompt: x.prompt }))}
+            posters={assets.filter((a) => a.kind === 'poster')}
+            chosenPoster={assets.filter((a) => a.kind === 'poster' && a.approved).pop() || null}
+            onPickPoster={pickPoster}
+            onSaveImage={async (kind, file) => {
+              const { path, url } = await uploadStudioFile(file, `${id}/${kind}`)
+              const { error } = await supabase.from('studio_assets').insert({ project_id: id, kind, url, storage_path: path, approved: false })
+              if (error) throw error
+              load()
+            }}
+          />
+        )}
+        <details className="manual" open={p.mode === 'semi'} key={p.mode}>
         <summary className="small">Cách tự làm bằng Gemini / Google Flow (tiết kiệm)</summary>
         <ol className="steps small">
           <li>
@@ -554,7 +591,7 @@ function AssetGrid({ assets, onApprove, onRemove, showApprove = true }) {
     <div className="assets">
       {assets.map((a) => (
         <div key={a.id} className={'asset' + (a.approved ? ' ok' : '')}>
-          <AssetPreview a={a} />
+          <AssetPreview a={a} group={assets} />
           <div className="row between small">
             {showApprove ? (
               <label className="check">
@@ -574,6 +611,8 @@ function AssetGrid({ assets, onApprove, onRemove, showApprove = true }) {
 }
 
 function VideoBuilder({ project, assets, options, onSaved, onError }) {
+  const zoom = useZoom()
+  const [tab, setTab] = useState(project.mode === 'semi' ? 'mix' : 'ai')
   const imgs = assets.filter((a) => ['poster', 'angle', 'photo'].includes(a.kind))
   const ratios = options.filter((o) => o.kind === 'ratio' && o.meta?.w)
   const selRatios = picked(project.selections, options, 'ratio').filter((o) => o.meta?.w)
@@ -607,6 +646,12 @@ function VideoBuilder({ project, assets, options, onSaved, onError }) {
 
   const audios = assets.filter((a) => a.kind === 'audio')
   const ratio = ratios.find((o) => o.id === ratioId)?.meta
+
+  const useAi = () => {
+    userPicked.current = true
+    const ok = (k) => imgs.filter((a) => a.kind === k && a.approved)
+    setChosen([...ok('poster').slice(-1), ...ok('angle')].map((a) => a.id))
+  }
 
   const toggle = (aid) => {
     userPicked.current = true
@@ -650,25 +695,36 @@ function VideoBuilder({ project, assets, options, onSaved, onError }) {
     }
   }
 
+  const aiImgs = chosen.map((cid) => imgs.find((a) => a.id === cid)).filter(Boolean)
   return (
     <section className="panel">
-      <h2>Dựng video (miễn phí, ngay trong trình duyệt)</h2>
-      <p className="muted small">
-        Ghép ảnh thành video có chuyển động, phụ đề và nhạc. Video dựng theo thời gian thực, nên giữ tab mở cho đến khi xong. Chuyển động:{' '}
-        <b>{{ zoom_in: 'zoom chậm', pan: 'lia ngang', fast_cuts: 'nhịp nhanh' }[motion]}</b>, phụ đề: <b>{capStyle}</b> (đổi ở bước 3).
-      </p>
-      {imgs.length === 0 && <p className="muted small">Hãy tải ảnh ở bước 2 hoặc bước 5 trước.</p>}
-      <div className="lbl">Chọn ảnh theo thứ tự xuất hiện (bấm để chọn, thứ tự = thứ tự bấm)</div>
+      <h2>Dựng video</h2>
+      <div className="tabs">
+        <button type="button" className={'tabbtn' + (tab === 'ai' ? ' on' : '')} onClick={() => setTab('ai')}>🤖 AI tạo video (Veo, tính phí)</button>
+        <button type="button" className={'tabbtn' + (tab === 'mix' ? ' on' : '')} onClick={() => setTab('mix')}>🎞 Ghép ảnh (miễn phí)</button>
+      </div>
+      {imgs.length === 0 && <p className="muted small">Hãy tải ảnh ở bước 2 hoặc tạo ảnh ở bước 5 trước.</p>}
+      <div className="row between">
+        <div className="lbl">Chọn ảnh theo thứ tự xuất hiện (bấm để chọn)</div>
+        <button type="button" className="chip" onClick={useAi}>Dùng poster + ảnh phụ AI đã duyệt</button>
+      </div>
       <div className="assets">
         {imgs.map((a) => (
           <div key={a.id} className={'asset selectable' + (chosen.includes(a.id) ? ' ok' : '')} onClick={() => toggle(a.id)}>
             <img src={a.url} alt="" />
+            <button type="button" className="zoombtn" title="Xem lớn" onClick={(e) => { e.stopPropagation(); zoom(imgs.map((x) => ({ kind: 'image', url: x.url, caption: KIND_LABEL[x.kind] })), imgs.indexOf(a)) }}>⤢</button>
             <div className="small">
               {chosen.includes(a.id) ? `#${chosen.indexOf(a.id) + 1}` : ''} {KIND_LABEL[a.kind]}
             </div>
           </div>
         ))}
       </div>
+      {tab === 'ai' && <AiVideo project={project} images={aiImgs} onSaved={onSaved} onError={onError} />}
+      {tab === 'mix' && (<>
+      <p className="muted small">
+        Ghép ảnh thành video có chuyển động, phụ đề và nhạc. Dựng theo thời gian thực nên giữ tab mở đến khi xong. Chuyển động:{' '}
+        <b>{{ zoom_in: 'zoom chậm', pan: 'lia ngang', fast_cuts: 'nhịp nhanh' }[motion]}</b>, phụ đề: <b>{capStyle}</b>.
+      </p>
       <div className="two">
         <label>
           Khung hình
@@ -739,6 +795,102 @@ function VideoBuilder({ project, assets, options, onSaved, onError }) {
           </div>
         </div>
       )}
+      </>)}
     </section>
+  )
+}
+
+
+const RATE = { lite: { '720p': 0.05, '1080p': 0.08 }, fast: { '720p': 0.1, '1080p': 0.12 } }
+const VND = 25500
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+// Mỗi ảnh được chọn thành một clip video do Veo tạo, lưu vào dự án (chưa duyệt)
+function AiVideo({ project, images, onSaved, onError }) {
+  const concept = chosenConcept(project)
+  const [aspect, setAspect] = useState('9:16')
+  const [seconds, setSeconds] = useState(6)
+  const [res, setRes] = useState('720p')
+  const [model, setModel] = useState('lite')
+  const [note, setNote] = useState('')
+  const [status, setStatus] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  const r1080 = aspect === '16:9' ? res : '720p'
+  const cost = images.length * seconds * RATE[model][r1080]
+
+  const run = async () => {
+    onError('')
+    if (!images.length) return onError('Hãy chọn ít nhất một ảnh ở trên.')
+    if (!confirm(`Tạo ${images.length} clip x ${seconds} giây, ${aspect}, ${r1080}.\nChi phí ước tính khoảng $${cost.toFixed(2)} (~${Math.round((cost * VND) / 1000) * 1000}đ) trừ vào tài khoản Google AI.\nTiếp tục?`)) return
+    setBusy(true)
+    try {
+      for (let i = 0; i < images.length; i++) {
+        setStatus(`Clip ${i + 1}/${images.length}: đang gửi cho Veo…`)
+        const img = await shrink(images[i].url, 1280)
+        const shot = concept?.storyboard?.[i]?.motion_en || 'slow cinematic push-in with gentle parallax'
+        const prompt = [
+          `Animate this image into a ${seconds}-second cinematic product clip.`,
+          `Camera and motion: ${shot}.`,
+          concept?.mood_en ? `Mood: ${concept.mood_en}.` : '',
+          note.trim(),
+          `Keep the product's shape, colors and printed details unchanged. No text overlays, no new objects, no people.`,
+        ].filter(Boolean).join(' ')
+        const st = await callFn('studio-video', { action: 'start', prompt, image: img, aspect, seconds, resolution: r1080, model })
+        const t0 = Date.now()
+        for (;;) {
+          await sleep(8000)
+          setStatus(`Clip ${i + 1}/${images.length}: Veo đang dựng… ${Math.round((Date.now() - t0) / 1000)} giây`)
+          const out = await callFn('studio-video', { action: 'poll', operation: st.operation, project_id: project.id })
+          if (out.done) break
+          if (Date.now() - t0 > 8 * 60 * 1000) throw new Error('Veo quá lâu chưa xong, thử lại sau.')
+        }
+        onSaved()
+      }
+      setStatus('Xong. Các clip nằm ở mục Kết quả → Video, tích “Dùng” clip bạn chọn.')
+    } catch (e) {
+      onError(e.message || String(e))
+      setStatus('')
+    }
+    setBusy(false)
+  }
+
+  return (
+    <div className="aivid">
+      <p className="muted small">Mỗi ảnh đã chọn trở thành một clip video có âm thanh (Google Veo 3.1). Clip lưu ở mục Kết quả để bạn xem và tích “Dùng”.</p>
+      <div className="two">
+        <label>Khổ video
+          <select value={aspect} onChange={(e) => setAspect(e.target.value)}>
+            <option value="9:16">Dọc 9:16 (TikTok, Reels, Shopee Video)</option>
+            <option value="16:9">Ngang 16:9 (YouTube, web)</option>
+          </select>
+        </label>
+        <label>Số giây mỗi clip
+          <select value={seconds} onChange={(e) => setSeconds(Number(e.target.value))}>
+            <option value="4">4 giây</option><option value="6">6 giây</option><option value="8">8 giây</option>
+          </select>
+        </label>
+      </div>
+      <div className="two">
+        <label>Chất lượng
+          <select value={r1080} onChange={(e) => setRes(e.target.value)} disabled={aspect !== '16:9'}>
+            <option value="720p">720p</option>
+            <option value="1080p">1080p (chỉ khổ ngang)</option>
+          </select>
+        </label>
+        <label>Mô hình
+          <select value={model} onChange={(e) => setModel(e.target.value)}>
+            <option value="lite">Veo 3.1 Lite (rẻ nhất)</option>
+            <option value="fast">Veo 3.1 Fast (đẹp hơn, gấp đôi giá)</option>
+          </select>
+        </label>
+      </div>
+      <label>Ý thêm cho chuyển động (tuỳ chọn)
+        <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="VD: ánh đèn nhấp nháy ấm, khói nhẹ bay lên" />
+      </label>
+      <p className="small"><b>Ước tính:</b> {images.length} clip × {seconds}s × ${RATE[model][r1080]}/s = <b>${cost.toFixed(2)}</b> (~{(Math.round((cost * VND) / 1000) * 1000).toLocaleString('vi-VN')}đ)</p>
+      <button className="btn" disabled={busy || !images.length} onClick={run}>{busy ? 'Đang tạo…' : `Tạo ${images.length || ''} clip bằng AI`}</button>
+      {status && <p className="note">{status}</p>}
+    </div>
   )
 }

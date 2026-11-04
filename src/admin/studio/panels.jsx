@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../supabase.js'
 import { INTERESTS } from '../../interests.js'
+import { useZoom } from './Lightbox.jsx'
 
 export const SPEC_FIELDS = { material: 'Chất liệu', size: 'Kích thước', weight: 'Trọng lượng', color: 'Màu sắc', make_time: 'Thời gian làm' }
 export const LINK_FIELDS = { shopee: 'Shopee', tiktokShop: 'TikTok Shop', lazada: 'Lazada', facebook: 'Bài Facebook', tiki: 'Tiki' }
@@ -182,49 +183,74 @@ const b64ToBlob = (b64, mime) => {
 const RATIO_LIST = [['1:1', 1], ['4:5', 0.8], ['3:4', 0.75], ['2:3', 0.667], ['9:16', 0.5625], ['4:3', 1.333], ['16:9', 1.778]]
 export const nearestRatio = (w, h) => (w && h ? RATIO_LIST.reduce((a, b) => (Math.abs(b[1] - w / h) < Math.abs(a[1] - w / h) ? b : a))[0] : '1:1')
 
-// Làn tự động: tạo poster và ảnh góc bằng AI, lưu thẳng vào dự án (chưa duyệt)
-export function AutoGen({ photos, jobs, aspect, onSaveImage }) {
+// Làn tự động: bước 1 tạo 3 phương án poster, bạn chọn một, bước 2 tạo ảnh góc phụ dựa trên poster đã chọn
+export function AutoGen({ photos, posterJobs, angleJobs, posters, chosenPoster, onPickPoster, aspect, onSaveImage }) {
+  const zoom = useZoom()
   const [busy, setBusy] = useState('')
   const [err, setErr] = useState('')
-  const [done, setDone] = useState([])
 
-  const run = async (list) => {
+  const run = async (list, withPoster) => {
     setErr('')
     if (!photos.length) return setErr('Hãy tải ít nhất một ảnh chụp sản phẩm ở mục 2 trước.')
+    if (withPoster && !chosenPoster) return setErr('Hãy chọn một phương án poster trước.')
+    let left = list.length
+    setBusy(`Đang tạo ${left} ảnh cùng lúc… (khoảng 20–40 giây)`)
     try {
-      const refs = await Promise.all(photos.slice(0, 3).map((a) => shrink(a.url)))
-      for (const j of list) {
-        setBusy(`Đang tạo: ${j.label}…`)
-        const out = await callFn('studio-image', { prompt: j.prompt, images: refs, aspect })
-        const ext = out.mime.includes('jpeg') ? 'jpg' : 'png'
-        const file = new File([b64ToBlob(out.data, out.mime)], `ai-${Date.now()}.${ext}`, { type: out.mime })
-        await onSaveImage(j.kind, file)
-        setDone((d) => [...d, j.label])
-      }
+      const shots = await Promise.all(photos.slice(0, withPoster ? 2 : 3).map((a) => shrink(a.url)))
+      const refs = withPoster ? [await shrink(chosenPoster.url), ...shots] : shots
+      const results = await Promise.allSettled(
+        list.map(async (j) => {
+          const out = await callFn('studio-image', { prompt: j.prompt, images: refs, aspect })
+          const ext = out.mime.includes('jpeg') ? 'jpg' : 'png'
+          const file = new File([b64ToBlob(out.data, out.mime)], `ai-${Date.now()}.${ext}`, { type: out.mime })
+          await onSaveImage(j.kind, file)
+          left -= 1
+          setBusy(left ? `Còn ${left} ảnh đang tạo…` : '')
+        }),
+      )
+      const bad = results.filter((r) => r.status === 'rejected')
+      if (bad.length) setErr(`${bad.length}/${list.length} ảnh lỗi: ${bad[0].reason?.message || bad[0].reason}`)
     } catch (e) {
       setErr(e.message || String(e))
     }
     setBusy('')
   }
 
+  const recent = posters.slice(-6)
   return (
     <div className="promptbox">
       <b>⚡ Tạo tự động bằng AI Gemini</b>
-      <p className="muted small">
-        AI nhìn ảnh chụp thật ở mục 2 và vẽ theo câu lệnh bên dưới (đã gồm cốt truyện bạn chọn). Ảnh vào mục “Kết quả” ở mục Kết quả, bạn xem rồi tích “Dùng”. Khoảng 1.700đ mỗi ảnh (giá công khai tạm tính, 1K).
-      </p>
+      <p className="muted small">AI nhìn ảnh chụp thật ở mục 2 rồi vẽ theo cốt truyện bạn chọn. Khoảng 1.700đ mỗi ảnh.</p>
+
+      <div className="step">Bước 1 · Tạo 3 phương án poster rồi chọn một</div>
       <div className="row">
-        {jobs.map((j) => (
-          <button key={j.label} className="btn ghost" disabled={!!busy} onClick={() => run([j])}>
-            {j.label}
-          </button>
+        <button className="btn" disabled={!!busy} onClick={() => run(posterJobs, false)}>Tạo 3 phương án poster</button>
+        {posterJobs.map((j) => (
+          <button key={j.label} className="btn ghost" disabled={!!busy} onClick={() => run([j], false)}>{j.label.replace('Phương án ', '')}</button>
         ))}
-        <button className="btn" disabled={!!busy} onClick={() => run(jobs)}>
-          Tạo cả bộ ({jobs.length} ảnh)
-        </button>
+      </div>
+      {recent.length > 0 && (
+        <div className="pposters">
+          {recent.map((a) => (
+            <div key={a.id} className={'pposter' + (chosenPoster?.id === a.id ? ' on' : '')}>
+              <img className="zoomable" src={a.url} alt="" onClick={() => zoom(recent.map((x) => ({ kind: 'image', url: x.url, caption: 'Poster' })), recent.indexOf(a))} />
+              <button type="button" className={chosenPoster?.id === a.id ? 'btn' : 'btn ghost'} onClick={() => onPickPoster(a)}>
+                {chosenPoster?.id === a.id ? '✓ Đã chọn' : 'Chọn'}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="step">Bước 2 · Tạo ảnh góc phụ (dựa trên poster đã chọn)</div>
+      {!chosenPoster && <p className="muted small">Chọn một poster ở bước 1 để mở khoá bước này.</p>}
+      <div className="row">
+        {angleJobs.map((j) => (
+          <button key={j.label} className="btn ghost" disabled={!!busy || !chosenPoster} onClick={() => run([j], true)}>{j.label}</button>
+        ))}
+        <button className="btn" disabled={!!busy || !chosenPoster} onClick={() => run(angleJobs, true)}>Tạo cả {angleJobs.length} ảnh phụ</button>
       </div>
       {busy && <p className="note">{busy}</p>}
-      {done.length > 0 && !busy && <p className="small">Đã tạo: {done.join(', ')}. Xem ở mục Kết quả.</p>}
       {err && <p className="error">{err}</p>}
     </div>
   )

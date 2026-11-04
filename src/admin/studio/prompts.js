@@ -51,7 +51,12 @@ export function buildPrompts({ project, product, options }) {
   const free = (project.free_text || '').trim()
   const title = (project.poster_title || concept?.poster_headline || '').trim()
 
-  const poster = [
+  const LAYOUTS = [
+    ['Phương án A', 'Layout A (centered hero): the product large and centered, big title at the top, promo badges around it, call-to-action ribbon at the bottom. Symmetrical, bold and clear.'],
+    ['Phương án B', 'Layout B (dynamic diagonal): product placed off-center at a slight angle in the lower right, huge stacked title on the left, energetic shapes and motion, badges overlapping the edges.'],
+    ['Phương án C', 'Layout C (minimal editorial): lots of clean negative space, product on a simple pedestal or surface, small elegant title, only one badge and a thin call-to-action line. Premium, calm look.'],
+  ]
+  const posterBase = [
     `Create a promotional poster for "InMây", a shop selling personalized 3D-printed products (tagline: "In những giấc mơ").`,
     `Use the attached reference photos as the REAL products. Keep their exact shape, colors and details. Do not redraw them or invent different products.`,
     `Product: ${name}${(info.description || product?.description) ? ` — ${info.description || product?.description}` : ''}.`,
@@ -66,30 +71,44 @@ export function buildPrompts({ project, product, options }) {
     `Aspect ratio: ${ratio}.`,
     free ? `Extra instructions: ${free}` : '',
     `All text must be spelled exactly as given with Vietnamese diacritics preserved. No watermarks, no extra logos.`,
-  ]
-    .filter(Boolean)
-    .join('\n')
+  ].filter(Boolean)
+  const posters = LAYOUTS.map(([label, lay]) => ({ label, prompt: [...posterBase, lay].join('\n') }))
+  const poster = posters[0].prompt
 
-  const angleBase = (view) =>
-    [
-      `Using the attached reference photos of the real product "${name}", create a lifestyle product image.`,
-      `Keep the product's exact shape, colors and details unchanged.`,
-      `Camera view: ${view}.`,
-      `Scene and background: ${scene}.`,
+  // Quy tắc hình học theo góc máy: nền phải khớp với góc nhìn
+  const viewOf = (a) => {
+    const t = `${a.label || ''} ${a.prompt_en || ''}`.toLowerCase()
+    if (/top-?down|overhead|flat-?lay|bird|từ trên|trên cao|nhìn từ trên/.test(t)) return 'top'
+    if (/macro|close-?up|detail|cận|chi tiết/.test(t)) return 'macro'
+    return 'mid'
+  }
+  const GEO = {
+    top: 'CAMERA GEOMETRY: the camera is directly above the product, pointing straight down at 90 degrees (true flat-lay). The product lies on a flat horizontal surface (table, fabric, paper or wood) seen from above. The background is ONLY that flat surface filling the whole frame: NO walls, NO horizon line, NO shelves, NO windows, NO sky, NO vertical perspective. Props are laid flat around the product and are also seen from above. Light is soft and comes from above, shadows fall directly under the objects.',
+    macro: 'CAMERA GEOMETRY: extreme close-up with a macro lens, very shallow depth of field. Only the product surface, edges and print texture are sharp. The background is fully out of focus, a soft bokeh made of the scene colors, with no recognizable objects.',
+    mid: 'CAMERA GEOMETRY: the camera is about 45 degrees above the product at a normal lens distance. The product stands on a surface; behind it the room, wall or shelf is visible in correct perspective, with a horizon line behind the product, gentle depth of field, and shadows that match the light direction.',
+  }
+  const sceneNoRoom = [concept?.props_en?.length ? `props: ${concept.props_en.join(', ')}` : '', concept?.mood_en ? `mood: ${concept.mood_en}` : '', concept?.palette_en ? `color palette: ${concept.palette_en}` : ''].filter(Boolean).join('; ')
+  const angleBase = (a) => {
+    const v = viewOf(a)
+    return [
+      `The first attached image is the APPROVED POSTER: match its color palette, lighting and mood, but do NOT copy its layout or any text. The other attached photos show the real product "${name}".`,
+      `Create a lifestyle product image. Keep the product's exact shape, colors and details unchanged.`,
+      GEO[v],
+      v === 'top' ? `Surface and props: ${sceneNoRoom || 'a plain wooden or fabric table top with a few small matching props'}.` : `Scene and background: ${scene}.`,
+      v === 'mid' && a.prompt_en ? `Composition idea: ${a.prompt_en}` : '',
       audience ? `Mood for audience: ${audience}.` : '',
       `Aspect ratio: ${ratio}. No text, no watermark.`,
       free ? `Extra instructions: ${free}` : '',
-    ]
-      .filter(Boolean)
-      .join('\n')
-
-  const angles = concept?.angle_shots?.length
-    ? concept.angle_shots.slice(0, 3).map((a) => ({ label: a.label, prompt: angleBase(a.prompt_en) }))
+    ].filter(Boolean).join('\n')
+  }
+  const baseAngles = concept?.angle_shots?.length
+    ? concept.angle_shots.slice(0, 3)
     : [
-    { label: 'Ảnh góc 45° trong bối cảnh', prompt: angleBase('three-quarter 45-degree angle, product in focus, soft depth of field') },
-    { label: 'Ảnh cận chi tiết', prompt: angleBase('macro close-up showing surface detail and print texture') },
-    { label: 'Ảnh nhìn từ trên xuống', prompt: angleBase('top-down flat-lay composition with a few matching props') },
-  ]
+        { label: 'Ảnh góc 45° trong bối cảnh', prompt_en: 'three-quarter 45-degree angle, product in focus, soft depth of field' },
+        { label: 'Ảnh cận chi tiết', prompt_en: 'macro close-up showing surface detail and print texture' },
+        { label: 'Ảnh nhìn từ trên xuống', prompt_en: 'top-down flat-lay composition with a few matching props' },
+      ]
+  const angles = baseAngles.map((a) => ({ label: a.label, prompt: angleBase(a), view: viewOf(a) }))
 
   const motions = list(P('motion')).join('; ') || (concept?.storyboard?.length ? concept.storyboard.map((s, i) => `shot ${i + 1}: ${s.motion_en}`).join('; ') : 'slow cinematic push-in on the product')
   const music = list(P('music'))[0]
@@ -122,7 +141,7 @@ export function buildPrompts({ project, product, options }) {
     .filter(Boolean)
     .join('\n')
 
-  return { poster, angles, clip, script }
+  return { poster, posters, angles, clip, script }
 }
 
 // Lấy các dòng phụ đề từ kịch bản AI trả về
