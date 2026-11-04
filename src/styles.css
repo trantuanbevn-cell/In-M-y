@@ -269,17 +269,17 @@ legend { font-weight: 600; padding: 0 6px; }
 .tile.done { border-left: 4px solid #16a34a; }
 .tile-t { font-weight: 600; }
 .tile-s { font-size: .82rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.modal-bg { position: fixed; inset: 0; z-index: 900; background: rgba(20,20,40,.55); display: flex; align-items: center; justify-content: center; padding: 20px; }
-.modal { background: #fff; border-radius: 18px; width: min(980px, 100%); max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,.35); }
-.modal-h { display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--line); }
-.modal-h h2 { margin: 0; font-size: 1.15rem; }
-.modal-x { background: none; border: 0; font-size: 20px; cursor: pointer; color: var(--muted); }
-.modal-b { padding: 16px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
-.modal-b label { display: flex; flex-direction: column; gap: 4px; font-size: .9rem; font-weight: 500; }
-.modal-b label.check { flex-direction: row; }
-.modal-b textarea, .modal-b input:not([type=checkbox]):not([type=file]):not([type=radio]), .modal-b select { font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
-.modal-f { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--line); }
-.modal .concepts { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
-.modal .pposters { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
-.modal .chosen { max-height: 120px; }
-@media (max-width: 640px) { .modal-bg { padding: 0; align-items: flex-end; } .modal { max-height: 94vh; border-radius: 18px 18px 0 0; } }
+.sdlg-bg { position: fixed; inset: 0; z-index: 900; background: rgba(20,20,40,.55); display: flex; align-items: center; justify-content: center; padding: 20px; }
+.sdlg { background: #fff; border-radius: 18px; width: min(980px, 100%); max-height: 90vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,.35); }
+.sdlg-h { display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--line); }
+.sdlg-h h2 { margin: 0; font-size: 1.15rem; }
+.sdlg-x { background: none; border: 0; font-size: 20px; cursor: pointer; color: var(--muted); }
+.sdlg-b { padding: 16px 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+.sdlg-b label { display: flex; flex-direction: column; gap: 4px; font-size: .9rem; font-weight: 500; }
+.sdlg-b label.check { flex-direction: row; }
+.sdlg-b textarea, .sdlg-b input:not([type=checkbox]):not([type=file]):not([type=radio]), .sdlg-b select { font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
+.sdlg-f { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 20px; border-top: 1px solid var(--line); }
+.sdlg .concepts { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.sdlg .pposters { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.sdlg .chosen { max-height: 120px; }
+@media (max-width: 640px) { .sdlg-bg { padding: 0; align-items: flex-end; } .sdlg { max-height: 94vh; border-radius: 18px 18px 0 0; } }

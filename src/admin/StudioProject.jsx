@@ -67,14 +67,14 @@ function Acc({ id, title, summary, open, onToggle, next, children }) {
         <span className="tile-s">{summary}</span>
       </button>
       {open && (
-        <div className="modal-bg" onClick={() => onToggle('')}>
-          <div className="modal" role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-h">
+        <div className="sdlg-bg" onClick={() => onToggle('')}>
+          <div className="sdlg" role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()}>
+            <div className="sdlg-h">
               <h2>{title}</h2>
-              <button type="button" className="modal-x" onClick={() => onToggle('')} aria-label="Đóng">✕</button>
+              <button type="button" className="sdlg-x" onClick={() => onToggle('')} aria-label="Đóng">✕</button>
             </div>
-            <div className="modal-b">{children}</div>
-            <div className="modal-f">
+            <div className="sdlg-b">{children}</div>
+            <div className="sdlg-f">
               <button type="button" className="btn ghost" onClick={() => onToggle('')}>Đóng</button>
               <button type="button" className="btn" onClick={() => onToggle(next || '')}>
                 {next ? 'Xong, mục tiếp theo' : 'Xong'}
