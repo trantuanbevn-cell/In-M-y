@@ -18,6 +18,24 @@ const loadBitmap = async (url) => {
   return createImageBitmap(await res.blob())
 }
 
+
+// Nhịp vẽ khung hình: dùng Web Worker để không bị trình duyệt làm chậm/dừng khi tab bị ẩn
+function makeTicker(fps, cb) {
+  try {
+    const blob = new Blob([`setInterval(function(){postMessage(0)},${Math.round(1000 / fps)})`], { type: 'text/javascript' })
+    const url = URL.createObjectURL(blob)
+    const w = new Worker(url)
+    w.onmessage = cb
+    return () => {
+      w.terminate()
+      URL.revokeObjectURL(url)
+    }
+  } catch {
+    const id = setInterval(cb, Math.round(1000 / fps))
+    return () => clearInterval(id)
+  }
+}
+
 const ease = (t) => t * t * (3 - 2 * t)
 
 function drawCover(ctx, img, W, H, zoom, panX) {
@@ -177,9 +195,16 @@ export async function renderSlideshow(opt) {
   const t0 = performance.now()
 
   await new Promise((resolve) => {
+    let finished = false
+    let stopTicker = () => {}
     const tick = () => {
+      if (finished) return
       const el = (performance.now() - t0) / 1000
-      if (el >= total) return resolve()
+      if (el >= total) {
+        finished = true
+        stopTicker()
+        return resolve()
+      }
       const i = Math.min(images.length - 1, Math.floor(el / secondsPerImage))
       const local = el - i * secondsPerImage
       ctx.fillStyle = '#000'
@@ -196,8 +221,8 @@ export async function renderSlideshow(opt) {
       }
       if (gain && total - el < 1) gain.gain.value = Math.max(0, (total - el) * 0.9)
       onProgress(0.05 + 0.95 * (el / total))
-      requestAnimationFrame(tick)
     }
+    stopTicker = makeTicker(fps, tick)
     tick()
   })
 

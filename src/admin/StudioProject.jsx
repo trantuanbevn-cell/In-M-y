@@ -398,6 +398,7 @@ function VideoBuilder({ project, assets, options, onSaved, onError }) {
   const [progress, setProgress] = useState(null)
   const [result, setResult] = useState(null)
   const touched = useRef(false)
+  const userPicked = useRef(false)
 
   useEffect(() => {
     if (!ratioId && defaultRatio) setRatioId(defaultRatio)
@@ -406,17 +407,18 @@ function VideoBuilder({ project, assets, options, onSaved, onError }) {
     if (!touched.current) setCaptionsText(extractCaptions(project.script || '').join('\n'))
   }, [project.script])
   useEffect(() => {
-    // Mặc định chọn poster + ảnh góc đã duyệt
-    if (!chosen.length) {
-      const pre = imgs.filter((a) => a.approved && a.kind !== 'photo').map((a) => a.id)
-      if (pre.length) setChosen(pre)
-    }
+    // Tự chọn poster + ảnh góc đã duyệt, cho tới khi bạn tự bấm chọn ảnh
+    if (userPicked.current) return
+    setChosen(imgs.filter((a) => a.approved && a.kind !== 'photo').map((a) => a.id))
   }, [assets])
 
   const audios = assets.filter((a) => a.kind === 'audio')
   const ratio = ratios.find((o) => o.id === ratioId)?.meta
 
-  const toggle = (aid) => setChosen((c) => (c.includes(aid) ? c.filter((x) => x !== aid) : [...c, aid]))
+  const toggle = (aid) => {
+    userPicked.current = true
+    setChosen((c) => (c.includes(aid) ? c.filter((x) => x !== aid) : [...c, aid]))
+  }
 
   const run = async () => {
     onError('')
