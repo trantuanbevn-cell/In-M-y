@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../supabase.js'
 import { KINDS, buildPrompts, chosenConcept, extractCaptions, picked, scriptFromConcept } from './studio/prompts.js'
-import { InfoPanel, StoryPanel } from './studio/panels.jsx'
+import { AutoGen, InfoPanel, StoryPanel, nearestRatio } from './studio/panels.jsx'
 import { slugify } from '../lib.js'
 import { copyText, downloadUrl, removeStudioFile, uploadStudioFile } from './studio/media.js'
 import { renderSlideshow } from './studio/renderVideo.js'
@@ -168,6 +168,7 @@ export default function StudioProject() {
   }
 
   const concept = chosenConcept(p)
+  const ratioMeta = picked(p.selections, options, 'ratio')[0]?.meta
 
   const publish = async () => {
     setErr('')
@@ -342,14 +343,29 @@ export default function StudioProject() {
         <h2>5. Tạo poster, ảnh góc và kịch bản</h2>
         <div className="lanes">
           <div className="lane on">
-            <b>Làn bán tự động</b>
-            <span className="muted small">Gần như miễn phí: dùng ứng dụng Gemini / Google Flow của bạn</span>
+            <b>Làn tự động (AI Gemini)</b>
+            <span className="muted small">Bấm một nút bên dưới: AI tạo poster và ảnh góc, trả thẳng vào dự án</span>
           </div>
-          <div className="lane off">
-            <b>Làn tự động</b>
-            <span className="muted small">Sắp có: cần khóa API (trả theo ảnh, khoảng vài nghìn đồng mỗi sản phẩm)</span>
+          <div className="lane on">
+            <b>Làn bán tự động</b>
+            <span className="muted small">Gần như miễn phí: tự dán câu lệnh vào Gemini / Google Flow</span>
           </div>
         </div>
+        <AutoGen
+          photos={assets.filter((a) => a.kind === 'photo')}
+          aspect={nearestRatio(ratioMeta?.w, ratioMeta?.h)}
+          jobs={[
+            { kind: 'poster', label: 'Poster chính', prompt: prompts.poster },
+            ...prompts.angles.map((x) => ({ kind: 'angle', label: x.label, prompt: x.prompt })),
+          ]}
+          onSaveImage={async (kind, file) => {
+            const { path, url } = await uploadStudioFile(file, `${id}/${kind}`)
+            const { error } = await supabase.from('studio_assets').insert({ project_id: id, kind, url, storage_path: path })
+            if (error) throw error
+            load()
+          }}
+        />
+        <p className="muted small">Cách tự làm (nếu muốn tiết kiệm):</p>
         <ol className="steps small">
           <li>
             Mở <a href="https://gemini.google.com/app" target="_blank" rel="noreferrer">Gemini</a>, chọn tạo ảnh, đính kèm ảnh chụp ở bước 2 (tải ở nút bên dưới).

@@ -66,7 +66,7 @@ export function InfoPanel({ info, categories, onSave }) {
   )
 }
 
-const shrink = async (url, max = 1024) => {
+export const shrink = async (url, max = 1024) => {
   const blob = await (await fetch(url)).blob()
   const bmp = await createImageBitmap(blob)
   const k = Math.min(1, max / Math.max(bmp.width, bmp.height))
@@ -156,6 +156,76 @@ export function StoryPanel({ photos, info, story, onSave, onUseGuess, onPick }) 
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+// Gọi Edge Function và lấy thông báo lỗi dễ hiểu
+export async function callFn(name, body) {
+  const { data, error } = await supabase.functions.invoke(name, { body })
+  if (error) {
+    let m = error.message
+    try { const j = await error.context.json(); m = j.message || j.error || m } catch {}
+    throw new Error(m)
+  }
+  if (data?.error) throw new Error(data.message || data.error)
+  return data
+}
+
+const b64ToBlob = (b64, mime) => {
+  const bin = atob(b64)
+  const u = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i)
+  return new Blob([u], { type: mime })
+}
+
+const RATIO_LIST = [['1:1', 1], ['4:5', 0.8], ['3:4', 0.75], ['2:3', 0.667], ['9:16', 0.5625], ['4:3', 1.333], ['16:9', 1.778]]
+export const nearestRatio = (w, h) => (w && h ? RATIO_LIST.reduce((a, b) => (Math.abs(b[1] - w / h) < Math.abs(a[1] - w / h) ? b : a))[0] : '1:1')
+
+// Làn tự động: tạo poster và ảnh góc bằng AI, lưu thẳng vào dự án (chưa duyệt)
+export function AutoGen({ photos, jobs, aspect, onSaveImage }) {
+  const [busy, setBusy] = useState('')
+  const [err, setErr] = useState('')
+  const [done, setDone] = useState([])
+
+  const run = async (list) => {
+    setErr('')
+    if (!photos.length) return setErr('Hãy tải ít nhất một ảnh chụp sản phẩm ở bước 2 trước.')
+    try {
+      const refs = await Promise.all(photos.slice(0, 3).map((a) => shrink(a.url)))
+      for (const j of list) {
+        setBusy(`Đang tạo: ${j.label}…`)
+        const out = await callFn('studio-image', { prompt: j.prompt, images: refs, aspect })
+        const ext = out.mime.includes('jpeg') ? 'jpg' : 'png'
+        const file = new File([b64ToBlob(out.data, out.mime)], `ai-${Date.now()}.${ext}`, { type: out.mime })
+        await onSaveImage(j.kind, file)
+        setDone((d) => [...d, j.label])
+      }
+    } catch (e) {
+      setErr(e.message || String(e))
+    }
+    setBusy('')
+  }
+
+  return (
+    <div className="promptbox">
+      <b>⚡ Tạo tự động bằng AI Gemini</b>
+      <p className="muted small">
+        AI nhìn ảnh chụp thật ở bước 2 và vẽ theo câu lệnh bên dưới (đã gồm cốt truyện bạn chọn). Ảnh vào mục “Kết quả” ở bước 6, bạn xem rồi tích “Dùng”. Khoảng 1.700đ mỗi ảnh (giá công khai tạm tính, 1K).
+      </p>
+      <div className="row">
+        {jobs.map((j) => (
+          <button key={j.label} className="btn ghost" disabled={!!busy} onClick={() => run([j])}>
+            {j.label}
+          </button>
+        ))}
+        <button className="btn" disabled={!!busy} onClick={() => run(jobs)}>
+          Tạo cả bộ ({jobs.length} ảnh)
+        </button>
+      </div>
+      {busy && <p className="note">{busy}</p>}
+      {done.length > 0 && !busy && <p className="small">Đã tạo: {done.join(', ')}. Xem ở bước 6.</p>}
+      {err && <p className="error">{err}</p>}
     </div>
   )
 }
