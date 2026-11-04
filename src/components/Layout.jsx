@@ -93,7 +93,9 @@ function Tab({ to, end, icon, children }) {
 export default function Layout() {
   const { settings } = useSettings()
   const { pathname } = useLocation()
-  useEffect(() => window.scrollTo(0, 0), [pathname])
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [pathname])
   const brand = settings.brand_name || 'InMây'
   const contact = settings.contact || {}
 
