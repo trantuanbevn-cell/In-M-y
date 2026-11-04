@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
           { type: 'image', data: im.data, mime_type: im.mime },
           { type: 'text', text },
         ],
-        response_format: { type: 'video', aspect_ratio: aspect, resolution },
+        response_format: { type: 'video', aspect_ratio: aspect, resolution, duration: `${seconds}s` },
         generation_config: { video_config: { task: 'image_to_video' } },
         background: true,
       }),

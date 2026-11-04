@@ -9,7 +9,7 @@ import { copyText, downloadUrl, removeStudioFile, uploadStudioFile } from './stu
 import { renderSlideshow } from './studio/renderVideo.js'
 import { canProRender, renderPro } from './studio/proRender.js'
 import ProOptions from './studio/ProOptions.jsx'
-import { DEFAULT_FX } from './studio/proCatalog.js'
+import { CAMERA, DEFAULT_FX } from './studio/proCatalog.js'
 
 const STATUS = { draft: 'Nháp', review: 'Chờ duyệt', approved: 'Đã duyệt', published: 'Đã đăng' }
 const KIND_LABEL = { photo: 'Ảnh chụp', poster: 'Poster', angle: 'Ảnh góc phụ', video: 'Video', audio: 'Nhạc' }
@@ -872,6 +872,7 @@ function AiVideo({ project, images, onSaved, onError }) {
   const [seconds, setSeconds] = useState(5)
   const [res, setRes] = useState('720p')
   const [note, setNote] = useState('')
+  const [cam, setCam] = useState('')
   const [status, setStatus] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -882,11 +883,12 @@ function AiVideo({ project, images, onSaved, onError }) {
     if (!images.length) return onError('Hãy chọn ít nhất một ảnh ở trên.')
     if (!confirm(`Tạo ${images.length} clip x ${seconds} giây, ${aspect}, ${res}.\nChi phí ước tính khoảng $${cost.toFixed(2)} (~${(Math.round((cost * VND) / 1000) * 1000).toLocaleString('vi-VN')}đ) trừ vào tài khoản Google AI.\nTiếp tục?`)) return
     setBusy(true)
+    const short = []
     try {
       for (let i = 0; i < images.length; i++) {
         setStatus(`Clip ${i + 1}/${images.length}: đang gửi cho AI…`)
         const img = await shrink(images[i].url, 1280)
-        const shot = concept?.storyboard?.[i]?.motion_en || 'slow cinematic push-in with gentle parallax'
+        const shot = CAMERA.find((c) => c[0] === cam && cam)?.[2] || concept?.storyboard?.[i]?.motion_en || 'slow cinematic push-in with gentle parallax'
         const prompt = [
           `Camera and motion: ${shot}.`,
           concept?.mood_en ? `Mood: ${concept.mood_en}.` : '',
@@ -895,16 +897,25 @@ function AiVideo({ project, images, onSaved, onError }) {
         ].filter(Boolean).join(' ')
         const st = await callFn('studio-video', { action: 'start', prompt, image: img, aspect, seconds, resolution: res })
         const t0 = Date.now()
+        let out
         for (;;) {
           await sleep(8000)
           setStatus(`Clip ${i + 1}/${images.length}: AI đang dựng… ${Math.round((Date.now() - t0) / 1000)} giây`)
-          const out = await callFn('studio-video', { action: 'poll', id: st.id, project_id: project.id })
+          out = await callFn('studio-video', { action: 'poll', id: st.id, project_id: project.id })
           if (out.done) break
           if (Date.now() - t0 > 10 * 60 * 1000) throw new Error('AI quá lâu chưa xong, thử lại sau.')
         }
+        // kiểm tra độ dài thật của clip Google trả về
+        try {
+          const v = document.createElement('video')
+          v.preload = 'metadata'
+          v.src = out.url
+          await new Promise((r) => { v.onloadedmetadata = r; v.onerror = r; setTimeout(r, 8000) })
+          if (v.duration && Math.abs(v.duration - seconds) > 1) short.push(`clip ${i + 1}: yêu cầu ${seconds}s, nhận ${v.duration.toFixed(1)}s`)
+        } catch { /* bỏ qua */ }
         onSaved()
       }
-      setStatus('Xong. Các clip nằm ở mục Kết quả → Video, bấm vào để xem lớn và tích “Dùng” clip bạn chọn.')
+      setStatus('Xong. Các clip nằm ở mục Kết quả → Video, bấm vào để xem lớn và tích “Dùng” clip bạn chọn.' + (short.length ? ' Lưu ý: Google trả clip ngắn hơn yêu cầu (' + short.join('; ') + ').' : ''))
     } catch (e) {
       onError(e.message || String(e))
       setStatus('')
@@ -935,6 +946,12 @@ function AiVideo({ project, images, onSaved, onError }) {
           <option value="1080p">1080p (nâng độ phân giải)</option>
         </select>
       </label>
+      <div className="lbl">Chuyển động camera</div>
+      <div className="chips">
+        {CAMERA.map(([id, label]) => (
+          <button key={id || 'auto'} type="button" className={'chip' + (cam === id ? ' on' : '')} onClick={() => setCam(id)}>{label}</button>
+        ))}
+      </div>
       <label>Ý thêm cho chuyển động (tuỳ chọn)
         <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="VD: ánh đèn nhấp nháy ấm, khói nhẹ bay lên" />
       </label>

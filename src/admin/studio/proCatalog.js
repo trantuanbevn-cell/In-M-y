@@ -41,6 +41,25 @@ export const SFX = [
   ['outro', '🎉 Ding kết'],
 ]
 
+// Chuyển động cho ảnh tĩnh (clip AI thì dùng chuyển động camera ở tab AI)
+export const MOTIONS = [
+  ['', 'Theo bước 4'], ['zoom_in', '🔍 Zoom vào'], ['zoom_out', '🔎 Zoom ra'], ['pan', '↔️ Lia ngang'],
+  ['orbit', '🔄 Xoay quanh (giả lập)'], ['tilt_up', '⬆️ Ngước lên'], ['fast_cuts', '⚡ Nhịp nhanh'], ['none', '⏸️ Đứng yên'],
+]
+
+// Chuyển động camera cho video AI (đưa vào câu lệnh)
+export const CAMERA = [
+  ['', 'Theo cốt truyện'],
+  ['orbit', '🔄 Quay quanh vật thể', 'the camera smoothly orbits around the product in a wide arc, revealing it from the side while keeping it centered and sharp, background shifting in correct perspective'],
+  ['push', '🔍 Đẩy vào', 'slow dolly-in toward the product, gentle parallax'],
+  ['pull', '↔️ Kéo ra', 'slow dolly-out revealing the surroundings'],
+  ['pan', '➡️ Lia ngang', 'smooth horizontal pan from left to right'],
+  ['crane', '⬇️ Hạ từ trên xuống', 'crane shot descending from above down to the product'],
+  ['tilt', '⬆️ Ngước lên', 'low angle, camera tilts up along the product'],
+  ['hand', '🤳 Cầm tay nhẹ', 'subtle handheld camera sway, natural and alive'],
+  ['zoom', '⚡ Zoom nhanh', 'fast punch-in zoom on the product detail'],
+]
+
 export const CAP_STYLES = [['tiktok', 'TikTok vàng'], ['minimal', 'Tối giản'], ['cute', 'Dễ thương'], ['neon', 'Neon']]
 export const CAP_ANIMS = [['pop', 'Bật to dần'], ['slide', 'Trượt lên'], ['type', 'Gõ từng chữ'], ['beat', 'Nhún theo nhịp'], ['none', 'Đứng yên']]
 export const STICKERS = [
@@ -54,6 +73,7 @@ export const DEFAULT_FX = {
   transitions: ['CrossZoom'],
   randomAll: false,
   tdur: 0.5,
+  motion: '',
   effects: [],
   grade: '',
   sfx: [],

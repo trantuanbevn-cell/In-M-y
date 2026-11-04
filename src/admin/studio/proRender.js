@@ -32,13 +32,17 @@ async function loadSegment(s) {
   return { ...s, el: await createImageBitmap(blob), dur: s.dur }
 }
 
-function drawCover(ctx, el, W, H, zoom, panX) {
+function drawCover(ctx, el, W, H, zoom, panX, panY = 0, rot = 0) {
   const iw = el.videoWidth || el.width
   const ih = el.videoHeight || el.height
   const s = Math.max(W / iw, H / ih) * zoom
   const w = iw * s
   const h = ih * s
-  ctx.drawImage(el, (W - w) / 2 + panX * W, (H - h) / 2, w, h)
+  ctx.save()
+  ctx.translate(W / 2 + panX * W, H / 2 + panY * H)
+  if (rot) ctx.rotate(rot)
+  ctx.drawImage(el, -w / 2, -h / 2, w, h)
+  ctx.restore()
 }
 
 async function seekTo(v, t) {
@@ -509,6 +513,7 @@ export async function renderPro(opt) {
   out.height = H
   const octx = out.getContext('2d')
 
+  const mot = fx.motion || motion
   const drawSeg = async (ctx, seg, idx, tAbs) => {
     const local = clamp(tAbs - seg.start, 0, seg.dur)
     ctx.fillStyle = '#000'
@@ -517,8 +522,15 @@ export async function renderPro(opt) {
     if (seg.type === 'video') {
       await seekTo(seg.el, Math.min(local, Math.max(0, seg.el.duration - 0.05)))
       drawCover(ctx, seg.el, W, H, 1.0 + 0.04 * ease(u), 0)
-    } else if (motion === 'pan') drawCover(ctx, seg.el, W, H, 1.12, (idx % 2 ? 1 : -1) * (0.04 - 0.08 * ease(u)))
-    else if (motion === 'fast_cuts') drawCover(ctx, seg.el, W, H, 1.0 + 0.1 * Math.sin(Math.PI * u), 0)
+    } else if (mot === 'pan') drawCover(ctx, seg.el, W, H, 1.12, (idx % 2 ? 1 : -1) * (0.04 - 0.08 * ease(u)))
+    else if (mot === 'fast_cuts') drawCover(ctx, seg.el, W, H, 1.0 + 0.1 * Math.sin(Math.PI * u), 0)
+    else if (mot === 'zoom_out') drawCover(ctx, seg.el, W, H, 1.16 - 0.14 * ease(u), 0)
+    else if (mot === 'tilt_up') drawCover(ctx, seg.el, W, H, 1.16, 0, 0.05 - 0.1 * ease(u))
+    else if (mot === 'orbit') {
+      // giả lập quay quanh vật thể từ ảnh tĩnh: lia ngang + xoay nhẹ + nhún, theo một vòng cung
+      const a = (u - 0.5) * 2
+      drawCover(ctx, seg.el, W, H, 1.22 + 0.04 * (1 - a * a), a * 0.09, 0.012 * (1 - a * a), a * 0.07)
+    } else if (mot === 'none') drawCover(ctx, seg.el, W, H, 1.0, 0)
     else drawCover(ctx, seg.el, W, H, 1.0 + 0.14 * ease(u), 0)
   }
 
@@ -690,4 +702,107 @@ export async function renderPro(opt) {
   gl.getExtension('WEBGL_lose_context')?.loseContext()
   onProgress(1)
   return { blob, type: 'video/mp4', ext: 'mp4', seconds: total, width: W, height: H, warnings }
+}
+
+/**
+ * Tự kiểm tra bộ máy: biên dịch và vẽ thử cả 178 chuyển cảnh + từng hiệu ứng, báo cái nào lỗi hoặc ra màn đen.
+ */
+export async function selfTest(onProgress = () => {}) {
+  const W = 144
+  const H = 256
+  const G = makeGL(W, H)
+  const gl = G.gl
+  const mk = (c1, c2) => {
+    const c = document.createElement('canvas')
+    c.width = W
+    c.height = H
+    const x = c.getContext('2d')
+    const g = x.createLinearGradient(0, 0, W, H)
+    g.addColorStop(0, c1)
+    g.addColorStop(1, c2)
+    x.fillStyle = g
+    x.fillRect(0, 0, W, H)
+    x.fillStyle = '#fff'
+    x.beginPath()
+    x.arc(W / 2, H / 2, 36, 0, 7)
+    x.fill()
+    return c
+  }
+  G.upload(G.texFrom, mk('#e11d48', '#fb923c'))
+  G.upload(G.texTo, mk('#0ea5e9', '#6366f1'))
+  const glt = (await import('gl-transitions')).default
+  const px = new Uint8Array(W * H * 4)
+  const mean = () => {
+    gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, px)
+    let s = 0
+    let mn = 255
+    let mx = 0
+    for (let i = 0; i < px.length; i += 4) {
+      const v = (px[i] + px[i + 1] + px[i + 2]) / 3
+      s += v
+      mn = Math.min(mn, v)
+      mx = Math.max(mx, v)
+    }
+    return { avg: s / (px.length / 4), range: mx - mn }
+  }
+  const bad = []
+  let ok = 0
+  for (let i = 0; i < glt.length; i++) {
+    const t = glt[i]
+    try {
+      const p = G.program(transFrag(t.glsl))
+      gl.bindFramebuffer(gl.FRAMEBUFFER, G.fbo)
+      gl.useProgram(p)
+      gl.activeTexture(gl.TEXTURE0)
+      gl.bindTexture(gl.TEXTURE_2D, G.texFrom)
+      gl.uniform1i(gl.getUniformLocation(p, 'from'), 0)
+      gl.activeTexture(gl.TEXTURE1)
+      gl.bindTexture(gl.TEXTURE_2D, G.texTo)
+      gl.uniform1i(gl.getUniformLocation(p, 'to'), 1)
+      gl.uniform1f(gl.getUniformLocation(p, 'ratio'), W / H)
+      for (const [n, ty] of Object.entries(t.paramsTypes || {})) setParam(gl, p, n, ty, (t.defaultParams || {})[n])
+      let good = true
+      for (const pr of [0.25, 0.5, 0.75]) {
+        gl.uniform1f(gl.getUniformLocation(p, 'progress'), pr)
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+        const m = mean()
+        if (!(m.avg > 8)) good = false
+      }
+      if (good) ok++
+      else bad.push(t.name + ' (ra màn đen)')
+      gl.deleteProgram(p)
+    } catch (e) {
+      bad.push(t.name + ' (lỗi shader)')
+    }
+    if (i % 10 === 0) {
+      onProgress(i / glt.length)
+      await new Promise((r) => setTimeout(r, 0))
+    }
+  }
+  // hiệu ứng: từng cờ một
+  const fxProg = G.program(FX_FRAG)
+  const names = ['pulse', 'shake', 'rgb', 'glitch', 'vignette', 'grain', 'vhs']
+  const effBad = []
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+  gl.useProgram(fxProg)
+  gl.activeTexture(gl.TEXTURE0)
+  gl.bindTexture(gl.TEXTURE_2D, G.texFrom)
+  gl.uniform1i(gl.getUniformLocation(fxProg, 'tex'), 0)
+  gl.uniform2f(gl.getUniformLocation(fxProg, 'res'), W, H)
+  const U = (n, v) => gl.uniform1f(gl.getUniformLocation(fxProg, n), v)
+  const run = (label, set) => {
+    for (const n of [...names, 'flash', 'grade', 'beat', 'time']) U(n, 0)
+    U('time', 1.234)
+    U('beat', 1)
+    set()
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
+    const m = mean()
+    if (!(m.avg > 8) || gl.getError() !== gl.NO_ERROR) effBad.push(label)
+  }
+  for (const n of names) run(n, () => U(n, 1))
+  for (let g = 1; g <= 6; g++) run('màu ' + g, () => U('grade', g))
+  run('flash', () => U('flash', 0.5))
+  gl.getExtension('WEBGL_lose_context')?.loseContext()
+  onProgress(1)
+  return { total: glt.length, ok, bad, effBad }
 }

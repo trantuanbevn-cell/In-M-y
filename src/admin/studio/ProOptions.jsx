@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { CAP_ANIMS, CAP_STYLES, DEFAULT_FX, EFFECTS, GRADES, PRESETS, SFX, STICKERS, TRANSITIONS } from './proCatalog.js'
+import { CAP_ANIMS, CAP_STYLES, DEFAULT_FX, EFFECTS, GRADES, MOTIONS, PRESETS, SFX, STICKERS, TRANSITIONS } from './proCatalog.js'
+import { selfTest } from './proRender.js'
 
 const has = (arr, v) => (arr || []).includes(v)
 const flip = (arr, v) => (has(arr, v) ? arr.filter((x) => x !== v) : [...(arr || []), v])
@@ -13,6 +14,18 @@ const Chip = ({ on, onClick, children, title }) => (
 // Các nhóm tuỳ chọn kiểu TikTok, chia tab nhỏ để không phải cuộn dài. exportNode là tab cuối (Dựng).
 export default function ProOptions({ fx, setFx, exportNode, count }) {
   const [tab, setTab] = useState('preset')
+  const [test, setTest] = useState(null)
+  const [testing, setTesting] = useState(false)
+  const runTest = async () => {
+    setTesting(true)
+    setTest(null)
+    try {
+      setTest(await selfTest())
+    } catch (e) {
+      setTest({ fail: e.message || String(e) })
+    }
+    setTesting(false)
+  }
   const set = (patch) => setFx((f) => ({ ...f, ...patch }))
   const tabs = [
     ['preset', '⚡ Mẫu nhanh'],
@@ -71,7 +84,14 @@ export default function ProOptions({ fx, setFx, exportNode, count }) {
 
       {tab === 'fx' && (
         <div>
-          <div className="lbl">Hiệu ứng hình (chọn nhiều)</div>
+          <div className="lbl">Chuyển động của ảnh tĩnh (chọn một)</div>
+          <div className="chips">
+            {MOTIONS.map(([id, label]) => (
+              <Chip key={id || 'auto'} on={fx.motion === id} onClick={() => set({ motion: id })}>{label}</Chip>
+            ))}
+          </div>
+          <p className="muted small">Ảnh tĩnh không quay quanh vật thể thật được, “Xoay quanh” chỉ là giả lập nhẹ. Muốn quay quanh thật, dùng tab “AI tạo video” và chọn chuyển động camera “Quay quanh vật thể”.</p>
+          <div className="lbl" style={{ marginTop: 12 }}>Hiệu ứng hình (chọn nhiều)</div>
           <div className="chips">
             {EFFECTS.map(([id, label]) => (
               <Chip key={id} on={has(fx.effects, id)} onClick={() => set({ effects: flip(fx.effects, id) })}>{label}</Chip>
@@ -88,6 +108,15 @@ export default function ProOptions({ fx, setFx, exportNode, count }) {
             <input type="range" min="60" max="150" step="5" value={fx.bpm} onChange={(e) => set({ bpm: Number(e.target.value) })} />
           </label>
           <p className="muted small">Chỉnh nhịp cho khớp với bài nhạc của bạn (hầu hết nhạc TikTok khoảng 100–130).</p>
+          <div className="row" style={{ marginTop: 10 }}>
+            <button type="button" className="btn ghost" disabled={testing} onClick={runTest}>{testing ? 'Đang kiểm tra…' : '🧪 Kiểm tra toàn bộ chuyển cảnh và hiệu ứng'}</button>
+          </div>
+          {test?.fail && <p className="error">{test.fail}</p>}
+          {test && !test.fail && (
+            <p className="small">
+              Chuyển cảnh: <b>{test.ok}/{test.total}</b> chạy tốt.{test.bad.length ? ' Lỗi: ' + test.bad.join(', ') + '.' : ''} Hiệu ứng/màu: {test.effBad.length ? 'lỗi ở ' + test.effBad.join(', ') : <b>tất cả chạy tốt</b>}.
+            </p>
+          )}
         </div>
       )}
 
