@@ -429,18 +429,18 @@ function StudioProjectInner() {
       </Acc>
 
       {/* 4. Câu lệnh */}
-      <Acc id="gen" title="5. Tạo ảnh bằng AI" summary={(p.mode === 'semi' ? 'Bán tự động' : 'Tự động') + ' · 3 poster + ' + prompts.angles.length + ' ảnh phụ'} open={open === 'gen'} onToggle={setOpen}>
+      <Acc id="gen" title="5. Tạo ảnh bằng AI" summary={(p.mode === 'manual' ? 'Bán tự động' : 'Tự động') + ' · 3 poster + ' + prompts.angles.length + ' ảnh phụ'} open={open === 'gen'} onToggle={setOpen}>
         <div className="modecards">
-          <button type="button" className={'modecard' + (p.mode !== 'semi' ? ' on' : '')} onClick={() => patch({ mode: 'auto' })}>
+          <button type="button" className={'modecard' + (p.mode !== 'manual' ? ' on' : '')} onClick={() => patch({ mode: 'auto' })}>
             <b>⚡ Tự động (AI Gemini)</b>
             <span className="small muted">Bấm nút, AI vẽ poster và ảnh phụ ngay trong app. Mất phí nhỏ mỗi ảnh.</span>
           </button>
-          <button type="button" className={'modecard' + (p.mode === 'semi' ? ' on' : '')} onClick={() => patch({ mode: 'semi' })}>
+          <button type="button" className={'modecard' + (p.mode === 'manual' ? ' on' : '')} onClick={() => patch({ mode: 'manual' })}>
             <b>✋ Bán tự động</b>
             <span className="small muted">App soạn sẵn câu lệnh, bạn dán vào Gemini/Flow rồi tải ảnh lên. Tiết kiệm.</span>
           </button>
         </div>
-        {p.mode !== 'semi' && (
+        {p.mode !== 'manual' && (
           <AutoGen
             photos={assets.filter((a) => a.kind === 'photo')}
             aspect={nearestRatio(ratioMeta?.w, ratioMeta?.h)}
@@ -457,7 +457,7 @@ function StudioProjectInner() {
             }}
           />
         )}
-        <details className="manual" open={p.mode === 'semi'} key={p.mode}>
+        <details className="manual" open={p.mode === 'manual'} key={p.mode}>
         <summary className="small">Cách tự làm bằng Gemini / Google Flow (tiết kiệm)</summary>
         <ol className="steps small">
           <li>
@@ -612,7 +612,7 @@ function AssetGrid({ assets, onApprove, onRemove, showApprove = true }) {
 
 function VideoBuilder({ project, assets, options, onSaved, onError }) {
   const zoom = useZoom()
-  const [tab, setTab] = useState(project.mode === 'semi' ? 'mix' : 'ai')
+  const [tab, setTab] = useState(project.mode === 'manual' ? 'mix' : 'ai')
   const imgs = assets.filter((a) => ['poster', 'angle', 'photo'].includes(a.kind))
   const ratios = options.filter((o) => o.kind === 'ratio' && o.meta?.w)
   const selRatios = picked(project.selections, options, 'ratio').filter((o) => o.meta?.w)
