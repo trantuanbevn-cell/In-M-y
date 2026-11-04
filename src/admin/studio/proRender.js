@@ -470,9 +470,11 @@ export async function renderPro(opt) {
   const trAll = fx.randomAll ? null : (fx.transitions?.length ? fx.transitions : [])
   let glt = []
   if (segs.length > 1 && (fx.randomAll || trAll.length)) glt = (await import('gl-transitions')).default
+  const BLACK = ['EdgeGlow', 'EyeBlink', 'RectangleCover', 'RectangleIris', 'SimpleFlip']
+  const pool = glt.filter((x) => !BLACK.includes(x.name))
   const pickT = (i) => {
     if (segs.length < 2) return null
-    if (fx.randomAll) return glt[Math.floor(Math.abs(Math.sin(i * 12.9898 + 1) * 43758.5453) % glt.length)]
+    if (fx.randomAll) return pool[Math.floor(Math.abs(Math.sin(i * 12.9898 + 1) * 43758.5453) % pool.length)]
     if (!trAll.length) return null
     return glt.find((x) => x.name === trAll[i % trAll.length]) || null
   }

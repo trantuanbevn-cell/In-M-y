@@ -65,7 +65,7 @@ export default function ProOptions({ fx, setFx, exportNode, count }) {
         <div>
           <p className="muted small">Chọn một hoặc nhiều kiểu. Các chỗ nối giữa các ảnh/clip sẽ dùng lần lượt các kiểu đã tích. Thư viện GL Transitions có 178 kiểu, đây là 40 kiểu đẹp nhất.</p>
           <div className="chips">
-            <Chip on={fx.randomAll} onClick={() => set({ randomAll: !fx.randomAll })}>🎲 Ngẫu nhiên trong cả 178 kiểu</Chip>
+            <Chip on={fx.randomAll} onClick={() => set({ randomAll: !fx.randomAll })}>🎲 Ngẫu nhiên trong 173 kiểu</Chip>
           </div>
           {!fx.randomAll && (
             <div className="chips" style={{ marginTop: 8 }}>
