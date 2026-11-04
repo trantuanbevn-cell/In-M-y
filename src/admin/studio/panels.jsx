@@ -88,7 +88,7 @@ export function StoryPanel({ photos, info, story, onSave, onUseGuess, onPick }) 
 
   const run = async (more) => {
     setErr('')
-    if (!photos.length) return setErr('Hãy tải ít nhất một ảnh chụp sản phẩm ở bước 2 trước.')
+    if (!photos.length) return setErr('Hãy tải ít nhất một ảnh chụp sản phẩm ở mục 2 trước.')
     setBusy(true)
     try {
       const images = await Promise.all(photos.slice(0, 3).map((a) => shrink(a.url)))
@@ -190,7 +190,7 @@ export function AutoGen({ photos, jobs, aspect, onSaveImage }) {
 
   const run = async (list) => {
     setErr('')
-    if (!photos.length) return setErr('Hãy tải ít nhất một ảnh chụp sản phẩm ở bước 2 trước.')
+    if (!photos.length) return setErr('Hãy tải ít nhất một ảnh chụp sản phẩm ở mục 2 trước.')
     try {
       const refs = await Promise.all(photos.slice(0, 3).map((a) => shrink(a.url)))
       for (const j of list) {
@@ -211,7 +211,7 @@ export function AutoGen({ photos, jobs, aspect, onSaveImage }) {
     <div className="promptbox">
       <b>⚡ Tạo tự động bằng AI Gemini</b>
       <p className="muted small">
-        AI nhìn ảnh chụp thật ở bước 2 và vẽ theo câu lệnh bên dưới (đã gồm cốt truyện bạn chọn). Ảnh vào mục “Kết quả” ở bước 6, bạn xem rồi tích “Dùng”. Khoảng 1.700đ mỗi ảnh (giá công khai tạm tính, 1K).
+        AI nhìn ảnh chụp thật ở mục 2 và vẽ theo câu lệnh bên dưới (đã gồm cốt truyện bạn chọn). Ảnh vào mục “Kết quả” ở mục Kết quả, bạn xem rồi tích “Dùng”. Khoảng 1.700đ mỗi ảnh (giá công khai tạm tính, 1K).
       </p>
       <div className="row">
         {jobs.map((j) => (
@@ -224,7 +224,7 @@ export function AutoGen({ photos, jobs, aspect, onSaveImage }) {
         </button>
       </div>
       {busy && <p className="note">{busy}</p>}
-      {done.length > 0 && !busy && <p className="small">Đã tạo: {done.join(', ')}. Xem ở bước 6.</p>}
+      {done.length > 0 && !busy && <p className="small">Đã tạo: {done.join(', ')}. Xem ở mục Kết quả.</p>}
       {err && <p className="error">{err}</p>}
     </div>
   )

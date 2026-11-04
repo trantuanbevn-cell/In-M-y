@@ -19,23 +19,94 @@ const ACCEPT = {
 
 function CopyBox({ title, text, hint }) {
   const [ok, setOk] = useState(false)
+  const [show, setShow] = useState(false)
   return (
     <div className="promptbox">
       <div className="row between">
         <b>{title}</b>
-        <button
-          type="button"
-          className="chip"
-          onClick={async () => {
-            setOk(await copyText(text))
-            setTimeout(() => setOk(false), 1500)
-          }}
-        >
-          {ok ? '✓ Đã sao chép' : 'Sao chép'}
-        </button>
+        <span className="row">
+          <button type="button" className="chip" onClick={() => setShow(!show)}>
+            {show ? 'Thu gọn' : 'Xem'}
+          </button>
+          <button
+            type="button"
+            className="chip"
+            onClick={async () => {
+              setOk(await copyText(text))
+              setTimeout(() => setOk(false), 1500)
+            }}
+          >
+            {ok ? '✓ Đã sao chép' : 'Sao chép'}
+          </button>
+        </span>
       </div>
-      {hint && <p className="muted small">{hint}</p>}
-      <pre>{text}</pre>
+      {show && hint && <p className="muted small">{hint}</p>}
+      {show && <pre>{text}</pre>}
+    </div>
+  )
+}
+
+// Mục gập: bấm tiêu đề để mở, chỉ một mục mở một lúc
+function Acc({ id, title, summary, open, onToggle, next, children }) {
+  return (
+    <section className={'acc' + (open ? ' open' : '')}>
+      <button type="button" className="acc-h" onClick={() => onToggle(open ? '' : id)} aria-expanded={open}>
+        <span className="acc-t">{title}</span>
+        <span className="acc-s">{summary}</span>
+        <span className="acc-c" aria-hidden="true">{open ? '▾' : '▸'}</span>
+      </button>
+      {open && (
+        <div className="acc-b">
+          {children}
+          <div className="row acc-f">
+            <button type="button" className="btn" onClick={() => onToggle(next || '')}>
+              {next ? 'Xong, mục tiếp theo' : 'Xong'}
+            </button>
+          </div>
+        </div>
+      )}
+    </section>
+  )
+}
+
+// Phong cách: mỗi nhóm một thẻ tab, chỉ hiện một nhóm
+function StylePanel({ options, selections, onToggle }) {
+  const kinds = KINDS.filter((k) => options.some((o) => o.kind === k.kind))
+  const [tab, setTab] = useState(kinds[0]?.kind)
+  const cur = kinds.find((k) => k.kind === tab) || kinds[0]
+  if (!cur) return <p className="muted small">Thư viện đang trống.</p>
+  const chosen = kinds.flatMap((k) => picked(selections, options, k.kind).map((o) => ({ ...o, _multi: k.multi })))
+  return (
+    <div>
+      <div className="tabs">
+        {kinds.map((k) => {
+          const n = (selections?.[k.kind] || []).length
+          return (
+            <button key={k.kind} type="button" className={'tabbtn' + (k.kind === cur.kind ? ' on' : '')} onClick={() => setTab(k.kind)}>
+              {k.label}
+              {n > 0 && <span className="cnt">{n}</span>}
+            </button>
+          )
+        })}
+      </div>
+      {chosen.length > 0 && (
+        <div className="chosen">
+          <span className="small muted">Đã chọn:</span>
+          {chosen.map((o) => (
+            <button key={o.id} type="button" className="chip on small" title="Bấm để bỏ" onClick={() => onToggle(o.kind, o.id, o._multi)}>
+              {o.label} ✕
+            </button>
+          ))}
+        </div>
+      )}
+      <KindPicker
+        key={cur.kind}
+        label={cur.label}
+        multi={cur.multi}
+        opts={options.filter((o) => o.kind === cur.kind)}
+        sel={selections?.[cur.kind] || []}
+        onToggle={(oid) => onToggle(cur.kind, oid, cur.multi)}
+      />
     </div>
   )
 }
@@ -57,6 +128,7 @@ export default function StudioProject() {
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
   const [loaded, setLoaded] = useState(false)
+  const [open, setOpen] = useState(null)
 
   const load = async () => {
     const [pr, as, op, pd, ct] = await Promise.all([
@@ -76,6 +148,9 @@ export default function StudioProject() {
   useEffect(() => {
     load()
   }, [id])
+  useEffect(() => {
+    if (loaded && open === null) setOpen(p?.info?.name ? '' : 'info')
+  }, [loaded])
 
   const product = useMemo(() => products.find((x) => x.id === p?.product_id), [products, p])
   const prompts = useMemo(() => (p ? buildPrompts({ project: p, product, options }) : null), [p, product, options])
@@ -236,6 +311,9 @@ export default function StudioProject() {
   }
 
   const approvedFiles = assets.filter((a) => a.approved)
+  const photoN = assets.filter((a) => a.kind === 'photo').length
+  const styleN = Object.values(p.selections || {}).reduce((n, arr) => n + (arr?.length || 0), 0)
+  const infoSum = p.info?.name ? `${p.info.name}${Number(p.info.price) ? ' · ' + Number(p.info.price).toLocaleString('vi-VN') + 'đ' : ''}` : 'Chưa điền'
 
   return (
     <div className="studio-proj">
@@ -259,9 +337,10 @@ export default function StudioProject() {
       {err && <p className="error">{err}</p>}
       {msg && <p className="note">{msg}</p>}
 
+      <div className="studio-grid">
+      <aside className="studio-set">
       {/* 1. Thông tin */}
-      <section className="panel">
-        <h2>1. Thông tin sản phẩm (khai báo để đăng bán)</h2>
+      <Acc id="info" title="1. Thông tin sản phẩm" summary={infoSum} open={open === 'info'} onToggle={setOpen} next="photos">
         <div className="two">
           <label>
             Tên dự án (chỉ để bạn nhận biết)
@@ -298,19 +377,17 @@ export default function StudioProject() {
             placeholder="VD: thêm vài con dơi, tông tím cam, không dùng màu xanh lá"
           />
         </label>
-      </section>
+      </Acc>
 
       {/* 2. Ảnh chụp */}
-      <section className="panel">
-        <h2>2. Ảnh chụp sản phẩm thật</h2>
+      <Acc id="photos" title="2. Ảnh chụp thật" summary={photoN ? `${photoN} ảnh` : 'Chưa có ảnh'} open={open === 'photos'} onToggle={setOpen} next="story">
         <p className="muted small">Chụp nhiều góc, nền sáng, đủ ánh sáng. Ảnh này là “nguồn thật” để AI giữ đúng hình dáng sản phẩm.</p>
         <AssetGrid assets={assets.filter((a) => a.kind === 'photo')} onApprove={setApproved} onRemove={removeAsset} showApprove={false} />
         <input type="file" accept={ACCEPT.photo} multiple onChange={(e) => { const fl = [...e.target.files]; e.target.value = ''; upload('photo', fl) }} />
-      </section>
+      </Acc>
 
       {/* 3. Cốt truyện AI */}
-      <section className="panel">
-        <h2>3. AI gợi ý cốt truyện và concept</h2>
+      <Acc id="story" title="3. Cốt truyện AI" summary={concept ? concept.title : p.story?.concepts?.length ? 'Chưa chọn' : 'Chưa có'} open={open === 'story'} onToggle={setOpen} next="style">
         <StoryPanel
           photos={assets.filter((a) => a.kind === 'photo')}
           info={p.info}
@@ -319,38 +396,16 @@ export default function StudioProject() {
           onUseGuess={useGuess}
           onPick={pickConcept}
         />
-      </section>
+      </Acc>
 
       {/* 4. Lựa chọn */}
-      <section className="panel">
-        <div className="row between">
-          <h2>4. Tinh chỉnh phong cách (tuỳ chọn, cộng thêm vào cốt truyện)</h2>
-          <Link className="small" to="/admin/studio/thu-vien">
-            Sửa thư viện ↗
-          </Link>
-        </div>
-        {KINDS.map(({ kind, label, multi }) => {
-          const opts = options.filter((o) => o.kind === kind)
-          if (!opts.length) return null
-          return (
-            <KindPicker key={kind} label={label} multi={multi} opts={opts} sel={p.selections?.[kind] || []} onToggle={(oid) => toggle(kind, oid, multi)} />
-          )
-        })}
-      </section>
+      <Acc id="style" title="4. Phong cách (tuỳ chọn)" summary={styleN ? `${styleN} lựa chọn` : 'Chưa chọn'} open={open === 'style'} onToggle={setOpen} next="gen">
+        <p className="small"><Link to="/admin/studio/thu-vien">Sửa thư viện ↗</Link></p>
+        <StylePanel options={options} selections={p.selections} onToggle={toggle} />
+      </Acc>
 
       {/* 4. Câu lệnh */}
-      <section className="panel">
-        <h2>5. Tạo poster, ảnh góc và kịch bản</h2>
-        <div className="lanes">
-          <div className="lane on">
-            <b>Làn tự động (AI Gemini)</b>
-            <span className="muted small">Bấm một nút bên dưới: AI tạo poster và ảnh góc, trả thẳng vào dự án</span>
-          </div>
-          <div className="lane on">
-            <b>Làn bán tự động</b>
-            <span className="muted small">Gần như miễn phí: tự dán câu lệnh vào Gemini / Google Flow</span>
-          </div>
-        </div>
+      <Acc id="gen" title="5. Tạo ảnh bằng AI" summary={`${prompts.angles.length + 1} ảnh · câu lệnh`} open={open === 'gen'} onToggle={setOpen}>
         <AutoGen
           photos={assets.filter((a) => a.kind === 'photo')}
           aspect={nearestRatio(ratioMeta?.w, ratioMeta?.h)}
@@ -365,7 +420,8 @@ export default function StudioProject() {
             load()
           }}
         />
-        <p className="muted small">Cách tự làm (nếu muốn tiết kiệm):</p>
+        <details className="manual">
+        <summary className="small">Cách tự làm bằng Gemini / Google Flow (tiết kiệm)</summary>
         <ol className="steps small">
           <li>
             Mở <a href="https://gemini.google.com/app" target="_blank" rel="noreferrer">Gemini</a>, chọn tạo ảnh, đính kèm ảnh chụp ở bước 2 (tải ở nút bên dưới).
@@ -391,15 +447,19 @@ export default function StudioProject() {
         ))}
         <CopyBox title="Câu lệnh clip AI (Google Flow / Veo)" text={prompts.clip} hint="Dùng poster hoặc ảnh góc đã chọn làm khung hình đầu." />
         <CopyBox title="Nhờ Gemini viết kịch bản & phụ đề" text={prompts.script} hint="Dán câu trả lời vào ô bên dưới. (Nếu đã chọn cốt truyện AI ở bước 3 thì kịch bản đã điền sẵn.)" />
+        </details>
         <label>
-          Kịch bản và phụ đề (dán câu trả lời của Gemini)
-          <textarea rows="6" defaultValue={p.script || ''} onBlur={(e) => patch({ script: e.target.value })} />
+          Kịch bản và phụ đề (dùng cho video)
+          <textarea rows="4" key={p.script || 'sc'} defaultValue={p.script || ''} onBlur={(e) => patch({ script: e.target.value })} />
         </label>
-      </section>
+      </Acc>
+      </aside>
+
+      <div className="studio-out">
 
       {/* 5. Kết quả */}
       <section className="panel">
-        <h2>6. Kết quả: tải lên và duyệt</h2>
+        <h2>Kết quả</h2>
         <p className="muted small">Tích “Dùng” cho những tệp bạn duyệt. Chỉ tệp được tích mới được đăng lên trang sản phẩm.</p>
         {['poster', 'angle', 'video', 'audio'].map((kind) => (
           <div key={kind} className="resblock">
@@ -415,7 +475,7 @@ export default function StudioProject() {
 
       {/* 7. Đăng */}
       <section className="panel">
-        <h2>8. Duyệt và đăng bán</h2>
+        <h2>Duyệt và đăng bán</h2>
         <p className="small muted">
           Đăng sẽ tạo (hoặc cập nhật) sản phẩm với đúng giá, mô tả, thông số, link Shopee/TikTok đã khai ở bước 1, đưa poster và ảnh góc đã duyệt lên đầu, gắn video đã duyệt. Khách thấy giá và đặt hàng được ngay.
           {product ? ` Đang gắn: ${product.name}.` : ' Chưa gắn sản phẩm, sẽ tạo mới.'}
@@ -439,6 +499,8 @@ export default function StudioProject() {
           Mẹo Shopee Video: định dạng MP4/MOV, dài 5 giây đến 3 phút. Video dựng ở bước 6 đã tự đảm bảo tối thiểu 5 giây.
         </p>
       </section>
+      </div>
+      </div>
     </div>
   )
 }
@@ -590,7 +652,7 @@ function VideoBuilder({ project, assets, options, onSaved, onError }) {
 
   return (
     <section className="panel">
-      <h2>7. Dựng video ngay trong trình duyệt (miễn phí)</h2>
+      <h2>Dựng video (miễn phí, ngay trong trình duyệt)</h2>
       <p className="muted small">
         Ghép ảnh thành video có chuyển động, phụ đề và nhạc. Video dựng theo thời gian thực, nên giữ tab mở cho đến khi xong. Chuyển động:{' '}
         <b>{{ zoom_in: 'zoom chậm', pan: 'lia ngang', fast_cuts: 'nhịp nhanh' }[motion]}</b>, phụ đề: <b>{capStyle}</b> (đổi ở bước 3).
