@@ -48,6 +48,8 @@ function CopyBox({ title, text, hint }) {
 }
 
 // Mục tính năng: bấm ô để mở bảng lớn giữa màn hình, chọn xong thì đóng lại
+const TILE = { info: ['📝', 'sky'], photos: ['📸', 'pink'], story: ['✨', 'violet'], style: ['🎨', 'amber'], gen: ['🖼️', 'mint'], video: ['🎬', 'coral'] }
+
 function Acc({ id, title, summary, open, onToggle, next, keepAlive, children }) {
   useEffect(() => {
     if (!open) return
@@ -60,11 +62,16 @@ function Acc({ id, title, summary, open, onToggle, next, keepAlive, children }) 
       document.body.style.overflow = prev
     }
   }, [open])
+  const isDone = !!summary && !/^(Chưa|0)/.test(summary)
   return (
     <>
-      <button type="button" className={'tile' + (summary && !/^(Chưa|0)/.test(summary) ? ' done' : '')} onClick={() => onToggle(id)}>
-        <span className="tile-t">{title}</span>
-        <span className="tile-s">{summary}</span>
+      <button type="button" className={`tile tone-${TILE[id]?.[1] || 'sky'}` + (isDone ? ' done' : '')} onClick={() => onToggle(id)}>
+        <span className="tile-ic" aria-hidden="true">{TILE[id]?.[0] || '•'}</span>
+        <span className="tile-tx">
+          <span className="tile-t">{title.replace(/^\d+\.\s*/, '')}</span>
+          <span className="tile-s">{summary}</span>
+        </span>
+        <span className="tile-n">{isDone ? '✓' : title.match(/^\d+/)?.[0]}</span>
       </button>
       {(open || keepAlive) && (
         <div className="sdlg-bg" style={open ? undefined : { display: 'none' }} onClick={() => onToggle('')}>
