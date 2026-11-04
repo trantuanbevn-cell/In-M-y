@@ -2,6 +2,21 @@
 // Dựng từng khung hình, nhanh hơn thời gian thực, và có âm thanh tổng hợp (nhạc nền, tiếng hiệu ứng, tiếng clip AI).
 import { Output, Mp4OutputFormat, BufferTarget, CanvasSource, AudioBufferSource, canEncodeAudio, canEncodeVideo } from 'mediabunny'
 
+// Sau mỗi lần cập nhật web, tab đang mở có thể còn trỏ tới tệp cũ đã bị thay: tự tải lại trang một lần.
+async function loadGlt() {
+  try {
+    return await import('gl-transitions')
+  } catch (e) {
+    if (!sessionStorage.getItem('inmay-reloaded')) {
+      sessionStorage.setItem('inmay-reloaded', '1')
+      location.reload()
+      await new Promise(() => {})
+    }
+    throw new Error('Web vừa được cập nhật. Hãy bấm Ctrl+F5 để tải lại rồi dựng video lại.')
+  }
+}
+
+
 export const canProRender = () => typeof VideoEncoder !== 'undefined' && typeof AudioEncoder !== 'undefined' && !!window.OffscreenCanvas
 
 const ease = (t) => t * t * (3 - 2 * t)
@@ -469,7 +484,7 @@ export async function renderPro(opt) {
   // chuyển cảnh gán cho từng chỗ nối
   const trAll = fx.randomAll ? null : (fx.transitions?.length ? fx.transitions : [])
   let glt = []
-  if (segs.length > 1 && (fx.randomAll || trAll.length)) glt = (await import('gl-transitions')).default
+  if (segs.length > 1 && (fx.randomAll || trAll.length)) glt = (await loadGlt()).default
   const BLACK = ['EdgeGlow', 'EyeBlink', 'RectangleCover', 'RectangleIris', 'SimpleFlip']
   const pool = glt.filter((x) => !BLACK.includes(x.name))
   const pickT = (i) => {
@@ -732,7 +747,7 @@ export async function selfTest(onProgress = () => {}) {
   }
   G.upload(G.texFrom, mk('#e11d48', '#fb923c'))
   G.upload(G.texTo, mk('#0ea5e9', '#6366f1'))
-  const glt = (await import('gl-transitions')).default
+  const glt = (await loadGlt()).default
   const px = new Uint8Array(W * H * 4)
   const mean = () => {
     gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, px)

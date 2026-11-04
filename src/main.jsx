@@ -11,3 +11,11 @@ createRoot(document.getElementById('root')).render(
     </BrowserRouter>
   </React.StrictMode>
 )
+
+window.addEventListener('vite:preloadError', () => {
+  if (!sessionStorage.getItem('inmay-reloaded')) {
+    sessionStorage.setItem('inmay-reloaded', '1')
+    location.reload()
+  }
+})
+window.addEventListener('load', () => setTimeout(() => sessionStorage.removeItem('inmay-reloaded'), 5000))
