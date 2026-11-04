@@ -1,3 +1,4 @@
+import { INTERESTS, inInterest } from '../interests.js'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { supabase } from '../supabase.js'
@@ -296,6 +297,15 @@ function StudioProjectInner() {
   const concept = chosenConcept(p)
   const ratioMeta = picked(p.selections, options, 'ratio')[0]?.meta
 
+  const chosenInterests = Array.isArray(p.info?.interests)
+    ? p.info.interests
+    : INTERESTS.filter((it) => (product ? inInterest(product, it) : false)).map((it) => it.slug)
+  const toggleInterest = (slug) => {
+    const cur = new Set(chosenInterests)
+    cur.has(slug) ? cur.delete(slug) : cur.add(slug)
+    patch({ info: { ...(p.info || {}), interests: [...cur] } })
+  }
+
   const publish = async () => {
     setErr('')
     setMsg('')
@@ -318,7 +328,10 @@ function StudioProjectInner() {
       category_id: info.category_id || null,
       specs: Object.fromEntries(Object.entries(info.specs || {}).filter(([, v]) => v && String(v).trim())),
       links: cleanLinks,
-      tags: String(info.tags || '').split(',').map((t) => t.trim()).filter(Boolean),
+      tags: [
+        ...String(info.tags || '').split(',').map((t) => t.trim()).filter(Boolean).filter((t) => !INTERESTS.some((i) => i.slug === t)),
+        ...chosenInterests,
+      ],
       badge: info.badge?.trim() || null,
       story: concept?.page_story || product?.story || null,
     }
@@ -546,7 +559,19 @@ function StudioProjectInner() {
           Đăng sẽ tạo (hoặc cập nhật) sản phẩm với đúng giá, mô tả, thông số, link Shopee/TikTok đã khai ở bước 1, đưa poster và ảnh góc đã duyệt lên đầu, gắn video đã duyệt. Khách thấy giá và đặt hàng được ngay.
           {product ? ` Đang gắn: ${product.name}.` : ' Chưa gắn sản phẩm, sẽ tạo mới.'}
         </p>
-        <div className="row">
+        <h3 style={{ marginTop: 14 }}>Hiện ở mục nào trên web?</h3>
+        <p className="small muted">Tích các mục sở thích để sản phẩm xuất hiện trong đó (Game thủ, Anime…). Chọn được nhiều mục. Có thể đổi sau rồi bấm cập nhật.</p>
+        <div className="row" style={{ flexWrap: 'wrap' }}>
+          {INTERESTS.map((it) => {
+            const on = chosenInterests.includes(it.slug)
+            return (
+              <button key={it.slug} type="button" className={'btn' + (on ? '' : ' ghost')} onClick={() => toggleInterest(it.slug)} aria-pressed={on}>
+                {on ? '✓ ' : ''}{it.name}
+              </button>
+            )
+          })}
+        </div>
+        <div className="row" style={{ marginTop: 12 }}>
           <button className="btn" onClick={publish}>
             {product ? 'Duyệt và cập nhật lên web' : 'Duyệt và đăng sản phẩm lên web'}
           </button>
