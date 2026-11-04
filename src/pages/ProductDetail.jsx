@@ -101,8 +101,12 @@ export default function ProductDetail() {
             ))}
           </div>
         )}
-        <OrderForm product={p} title="Đặt sản phẩm này" />
+        <div id="dat-hang"><OrderForm product={p} title="Đặt sản phẩm này" /></div>
       </div>
+      <a className="buybar" href="#dat-hang">
+        <span>{p.sale_price > 0 && p.price > 0 ? vnd(p.sale_price) : p.price > 0 ? vnd(p.price) : 'Liên hệ báo giá'}</span>
+        <b>Đặt ngay</b>
+      </a>
     </div>
   )
 }

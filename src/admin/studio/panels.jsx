@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../../supabase.js'
+import { INTERESTS } from '../../interests.js'
 
 export const SPEC_FIELDS = { material: 'Chất liệu', size: 'Kích thước', weight: 'Trọng lượng', color: 'Màu sắc', make_time: 'Thời gian làm' }
 export const LINK_FIELDS = { shopee: 'Shopee', tiktokShop: 'TikTok Shop', lazada: 'Lazada', facebook: 'Bài Facebook', tiki: 'Tiki' }
@@ -37,6 +38,22 @@ export function InfoPanel({ info, categories, onSave }) {
           <label key={k}>{label}<input value={f.specs?.[k] || ''} onChange={setIn('specs', k)} /></label>
         ))}
         <label>Thẻ (cách nhau dấu phẩy)<input value={f.tags || ''} onChange={set('tags')} placeholder="đèn ngủ, quà tặng, trẻ em" /></label>
+        <div>
+          <span className="small">Thuộc sở thích nào trên web (bấm để thêm/bỏ thẻ)</span>
+          <div className="chips">
+            {INTERESTS.map((it) => {
+              const list = String(f.tags || '').split(',').map((t) => t.trim()).filter(Boolean)
+              const on = list.includes(it.slug)
+              return (
+                <button key={it.slug} type="button" className={'chip' + (on ? ' on' : '')} onClick={() => {
+                  const next = { ...f, tags: (on ? list.filter((t) => t !== it.slug) : [...list, it.slug]).join(', ') }
+                  setF(next)
+                  commit(next)
+                }}>{it.name}</button>
+              )
+            })}
+          </div>
+        </div>
         <label>Huy hiệu trên thẻ sản phẩm<input value={f.badge || ''} onChange={set('badge')} placeholder="VD: Mới, Độc bản" /></label>
       </div>
       <b className="small">Link bán trên các kênh (dán link sản phẩm)</b>
