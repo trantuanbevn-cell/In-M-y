@@ -184,3 +184,8 @@ legend { font-weight: 600; padding: 0 6px; }
 .nowrap { white-space: nowrap; }
 .prod-video { width: 100%; max-height: 520px; margin-top: 12px; border-radius: 12px; background: #000; }
 @media (max-width: 760px) { .two, .lanes { grid-template-columns: 1fr; } }
+.search { font: inherit; padding: 7px 12px; border: 1px solid var(--line); border-radius: 999px; min-width: 220px; margin: 6px 0; }
+.soon { background: #fff8e8; border: 1px solid #f3dfae; border-radius: 12px; padding: 8px 12px; margin: 6px 0; }
+.soon .chips { margin: 6px 0 0; }
+.grp { font-weight: 600; margin: 10px 0 4px; }
+.pick .chips { margin-bottom: 6px; }

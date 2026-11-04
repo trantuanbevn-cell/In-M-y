@@ -14,6 +14,7 @@ export default function StudioLibrary() {
   const [kind, setKind] = useState(KINDS[0].kind)
   const [f, setF] = useState(null)
   const [err, setErr] = useState('')
+  const [q, setQ] = useState('')
 
   const load = async () => {
     const { data } = await supabase.from('studio_options').select('*').order('ordering').order('created_at')
@@ -23,7 +24,8 @@ export default function StudioLibrary() {
     load()
   }, [])
 
-  const list = rows.filter((r) => r.kind === kind)
+  const norm = (s = '') => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd')
+  const list = rows.filter((r) => r.kind === kind && (!q || norm(r.label + ' ' + r.prompt + ' ' + (r.meta?.group || '')).includes(norm(q))))
   const meta = KINDS.find((k) => k.kind === kind)
 
   const save = async (e) => {
@@ -35,6 +37,14 @@ export default function StudioLibrary() {
     } catch {
       return setErr('Phần “Tham số kỹ thuật” phải là JSON hợp lệ, ví dụ {"ffmpeg":"zoom_in"}.')
     }
+    const monthsArr = (f.monthsText || '')
+      .split(/[,\s]+/)
+      .map((x) => parseInt(x, 10))
+      .filter((n) => n >= 1 && n <= 12)
+    if (f.group?.trim()) metaJson.group = f.group.trim()
+    else delete metaJson.group
+    if (monthsArr.length) metaJson.months = monthsArr
+    else delete metaJson.months
     const payload = {
       kind,
       label: f.label.trim(),
@@ -66,7 +76,7 @@ export default function StudioLibrary() {
         <button
           className="btn"
           onClick={() =>
-            setF({ label: '', prompt: '', metaText: '', ordering: list.length + 1, is_active: true })
+            setF({ label: '', prompt: '', group: '', monthsText: '', metaText: '', ordering: rows.filter((r) => r.kind === kind).length + 1, is_active: true })
           }
         >
           + Thêm lựa chọn
@@ -85,11 +95,12 @@ export default function StudioLibrary() {
         ))}
       </div>
       {HINT[kind] && <p className="muted small">{HINT[kind]}</p>}
+      <input className="search" type="search" placeholder="Tìm trong mục này…" value={q} onChange={(e) => setQ(e.target.value)} />
 
       <table className="tbl">
         <thead>
           <tr>
-            <th>Tên hiển thị</th>
+            <th>Tên hiển thị · nhóm · tháng gợi ý</th>
             <th>Mô tả đưa vào câu lệnh</th>
             <th></th>
           </tr>
@@ -99,12 +110,21 @@ export default function StudioLibrary() {
             <tr key={r.id} style={{ opacity: r.is_active ? 1 : 0.5 }}>
               <td>
                 <b>{r.label}</b>
+                {(r.meta?.group || r.meta?.months) && (
+                  <div className="muted small">
+                    {r.meta?.group}
+                    {r.meta?.months ? ` · tháng ${r.meta.months.join(', ')}` : ''}
+                  </div>
+                )}
               </td>
               <td className="small">{r.prompt}</td>
               <td className="nowrap">
                 <button
                   className="linkbtn"
-                  onClick={() => setF({ ...r, metaText: Object.keys(r.meta || {}).length ? JSON.stringify(r.meta) : '' })}
+                  onClick={() => {
+                    const { group, months, ...rest } = r.meta || {}
+                    setF({ ...r, group: group || '', monthsText: (months || []).join(', '), metaText: Object.keys(rest).length ? JSON.stringify(rest) : '' })
+                  }}
                 >
                   Sửa
                 </button>{' '}
@@ -138,6 +158,18 @@ export default function StudioLibrary() {
               Mô tả đưa vào câu lệnh (tiếng Anh cho ảnh/video thường cho kết quả tốt hơn)
               <textarea rows="3" value={f.prompt} onChange={(e) => setF({ ...f, prompt: e.target.value })} />
             </label>
+            {kind === 'scene' && (
+              <div className="two">
+                <label>
+                  Nhóm (để gom lại cho dễ chọn)
+                  <input value={f.group || ''} onChange={(e) => setF({ ...f, group: e.target.value })} placeholder="VD: Lễ hội truyền thống" />
+                </label>
+                <label>
+                  Tháng gợi ý (1–12, cách nhau dấu phẩy)
+                  <input value={f.monthsText || ''} onChange={(e) => setF({ ...f, monthsText: e.target.value })} placeholder="VD: 8, 9 (gồm cả tháng chuẩn bị)" />
+                </label>
+              </div>
+            )}
             <label>
               Tham số kỹ thuật (JSON, tuỳ chọn)
               <input

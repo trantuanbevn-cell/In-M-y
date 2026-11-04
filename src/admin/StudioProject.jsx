@@ -219,20 +219,8 @@ export default function StudioProject() {
         {KINDS.map(({ kind, label, multi }) => {
           const opts = options.filter((o) => o.kind === kind)
           if (!opts.length) return null
-          const sel = p.selections?.[kind] || []
           return (
-            <div key={kind} className="pick">
-              <div className="lbl">
-                {label} <span className="muted small">{multi ? '(chọn nhiều)' : '(chọn một)'}</span>
-              </div>
-              <div className="chips">
-                {opts.map((o) => (
-                  <button key={o.id} type="button" className={'chip' + (sel.includes(o.id) ? ' on' : '')} onClick={() => toggle(kind, o.id, multi)}>
-                    {o.label}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <KindPicker key={kind} label={label} multi={multi} opts={opts} sel={p.selections?.[kind] || []} onToggle={(oid) => toggle(kind, oid, multi)} />
           )
         })}
       </section>
@@ -320,6 +308,49 @@ export default function StudioProject() {
           Mẹo Shopee Video: định dạng MP4/MOV, dài 5 giây đến 3 phút. Video dựng ở bước 6 đã tự đảm bảo tối thiểu 5 giây.
         </p>
       </section>
+    </div>
+  )
+}
+
+
+const norm = (s = '') => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd')
+
+function KindPicker({ label, multi, opts, sel, onToggle }) {
+  const [q, setQ] = useState('')
+  const month = new Date().getMonth() + 1
+  const next = (month % 12) + 1
+  const soon = opts.filter((o) => (o.meta?.months || []).some((m) => m === month || m === next))
+  const shown = q ? opts.filter((o) => norm(o.label + ' ' + (o.meta?.group || '')).includes(norm(q))) : opts
+  const grouped = opts.some((o) => o.meta?.group)
+  const groups = grouped ? [...new Set(shown.map((o) => o.meta?.group || 'Khác'))] : [null]
+  const chip = (o) => (
+    <button key={o.id} type="button" className={'chip' + (sel.includes(o.id) ? ' on' : '')} onClick={() => onToggle(o.id)}>
+      {o.label}
+    </button>
+  )
+  return (
+    <div className="pick">
+      <div className="row between">
+        <div className="lbl">
+          {label} <span className="muted small">{multi ? '(chọn nhiều)' : '(chọn một)'} · {opts.length} lựa chọn</span>
+        </div>
+        {opts.length > 12 && (
+          <input className="search" type="search" placeholder="Tìm: Tết, Trung thu, gaming…" value={q} onChange={(e) => setQ(e.target.value)} />
+        )}
+      </div>
+      {!q && soon.length > 0 && (
+        <div className="soon">
+          <span className="small">📅 Gợi ý cho tháng {month}–{next}:</span>
+          <div className="chips">{soon.map(chip)}</div>
+        </div>
+      )}
+      {groups.map((g) => (
+        <div key={g || 'all'}>
+          {g && <div className="grp small muted">{g}</div>}
+          <div className="chips">{(g ? shown.filter((o) => (o.meta?.group || 'Khác') === g) : shown).map(chip)}</div>
+        </div>
+      ))}
+      {q && shown.length === 0 && <p className="muted small">Không thấy. Thử từ khoá khác hoặc thêm lựa chọn mới ở “Sửa thư viện”.</p>}
     </div>
   )
 }
